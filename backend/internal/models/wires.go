@@ -10,7 +10,7 @@ type WireColor string
 const (
 	Red    WireColor = "red"
 	Blue   WireColor = "blue"
-	Black  WireColor = "black"
+	Green  WireColor = "green"
 	White  WireColor = "white"
 	Yellow WireColor = "yellow"
 )
@@ -28,7 +28,7 @@ type WiresModule struct {
 func NewWiresModule() *WiresModule {
 	// Generate 3-6 wires randomly
 	numWires := rand.Intn(4) + 3 // 3-6 wires
-	colors := []WireColor{Red, Blue, Black, White, Yellow}
+	colors := []WireColor{Red, Blue, Green, White, Yellow}
 
 	wires := make([]WireColor, numWires)
 	for i := 0; i < numWires; i++ {
@@ -45,16 +45,26 @@ func NewWiresModule() *WiresModule {
 	return module
 }
 
-// NewWiresModuleWithRules creates a new wires module with random wire configuration and rules
-func NewWiresModuleWithRules(ruleSet *WireRuleSet) *WiresModule {
+// NewWiresModuleWithRules creates a new wires module with random wire configuration and generates rules based on wire count
+// wireSeed: seed for generating random wire configuration (different for each module)
+// ruleSeed: seed for generating rules (same for all modules to match the manual)
+// Returns the module and its corresponding manual
+func NewWiresModuleWithRules(wireSeed int64, ruleSeed int64) (*WiresModule, *ModuleManual) {
+	// Create a seeded RNG for wire generation using the wireSeed (unique per module)
+	rng := rand.New(rand.NewSource(wireSeed))
+	
 	// Generate 3-6 wires randomly
-	numWires := rand.Intn(4) + 3 // 3-6 wires
-	colors := []WireColor{Red, Blue, Black, White, Yellow}
+	numWires := rng.Intn(4) + 3 // 3-6 wires
+	colors := []WireColor{Red, Blue, Green, White, Yellow}
 
 	wires := make([]WireColor, numWires)
 	for i := 0; i < numWires; i++ {
-		wires[i] = colors[rand.Intn(len(colors))]
+		wires[i] = colors[rng.Intn(len(colors))]
 	}
+
+	// Generate rules and manual based on the number of wires using ruleSeed (same for all modules)
+	// Use ruleSeed + numWires to get the same rules as in the comprehensive manual for this wire count
+	ruleSet, moduleManual := GenerateWireModuleRulesWithSeed(numWires, ruleSeed+int64(numWires))
 
 	module := &WiresModule{
 		Wires:    wires,
@@ -64,7 +74,7 @@ func NewWiresModuleWithRules(ruleSet *WireRuleSet) *WiresModule {
 	}
 
 	module.CorrectCut = module.determineCorrectWire()
-	return module
+	return module, moduleManual
 }
 
 // determineCorrectWire calculates which wire should be cut based on rules
@@ -78,7 +88,16 @@ func (wm *WiresModule) determineCorrectWire() int {
 				return result
 			}
 		}
-		// No rule matched, use default: cut last wire
+		// No rule matched, use default rule (should be the last rule in the set)
+		// The default rule evaluator always returns a valid wire index
+		if len(wm.RuleSet.Rules) > 0 {
+			lastRule := wm.RuleSet.Rules[len(wm.RuleSet.Rules)-1]
+			result := lastRule.Evaluator(wm.Wires)
+			if result >= 0 {
+				return result
+			}
+		}
+		// Fallback: cut last wire (shouldn't happen if default rule is properly set)
 		return len(wm.Wires) - 1
 	}
 

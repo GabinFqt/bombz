@@ -1,6 +1,8 @@
 package models
 
 import (
+	"fmt"
+	"math/rand"
 	"time"
 )
 
@@ -24,6 +26,7 @@ type Bomb struct {
 	StartTime     time.Time                 `json:"startTime"`
 	WiresModules  []*WiresModule             `json:"wiresModules"` // 6 wire modules
 	ModuleRules   map[string]*ModuleManual `json:"moduleRules"`   // Rules for each module type
+	Seed          int64                     `json:"seed"`          // Random seed used for rule generation (ensures manual and modules are aligned)
 }
 
 // NewBomb creates a new bomb with initial configuration
@@ -36,17 +39,25 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		moduleCount = 6
 	}
 	
-	// Generate rules for wire modules
-	wireRuleSet, wireModuleManual := GenerateWireModuleRules()
+	// Generate a random seed for this bomb
+	// This seed will be used for both manual and module rules to ensure they are aligned
+	seed := rand.Int63()
 	
-	// Store module rules
+	// Store module rules - each module will have its own manual
 	moduleRules := make(map[string]*ModuleManual)
-	moduleRules["wireModule"] = wireModuleManual
 	
-	// Create wire modules with the generated rules
+	// Create wire modules - each generates its own rules based on wire count using the random seed
+	// Each module uses seed + moduleIndex to ensure different wire configurations while keeping rules aligned
 	wiresModules := make([]*WiresModule, moduleCount)
 	for i := 0; i < moduleCount; i++ {
-		wiresModules[i] = NewWiresModuleWithRules(wireRuleSet)
+		// Use seed + moduleIndex to differentiate each module's wire generation
+		// But still use the base seed for rules to match the manual
+		moduleSeed := seed + int64(i)*1000000 // Large multiplier to avoid overlap with rule seeds
+		module, moduleManual := NewWiresModuleWithRules(moduleSeed, seed)
+		wiresModules[i] = module
+		
+		// Store manual with module index key (e.g., "wireModule0", "wireModule1")
+		moduleRules[fmt.Sprintf("wireModule%d", i)] = moduleManual
 	}
 
 	return &Bomb{
@@ -59,6 +70,7 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		StartTime:     time.Now(),
 		WiresModules:  wiresModules,
 		ModuleRules:   moduleRules,
+		Seed:          seed,
 	}
 }
 

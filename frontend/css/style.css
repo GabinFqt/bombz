@@ -266,8 +266,8 @@ button:active {
 
 .wire-color.red { background: #ff0000; }
 .wire-color.blue { background: #0066ff; }
-.wire-color.black { background: #000000; border: 1px solid #fff; }
-.wire-color.white { background: #ffffff; }
+.wire-color.green { background: #00ff00; }
+.wire-color.white { background: #ffffff; border: 2px solid #000; }
 .wire-color.yellow { background: #ffff00; }
 
 #manual-bomb-status {

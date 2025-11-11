@@ -248,7 +248,7 @@ class Bomb3D {
         const colorMap = {
             'red': 0xff0000,
             'blue': 0x0066ff,
-            'black': 0x000000,
+            'green': 0x00ff00,
             'white': 0xffffff,
             'yellow': 0xffff00,
         };
@@ -257,17 +257,38 @@ class Bomb3D {
         
         // Wire geometry (horizontal line) - thicker and more visible
         const wireGeometry = new THREE.CylinderGeometry(0.03, 0.03, wireLength, 12);
+        
+        // Special handling for white wires to make them more distinguishable
+        let emissiveColor = new THREE.Color(wireColor).multiplyScalar(0.1);
+        if (wireColor === 0xffffff) {
+            // White wire: brighter emissive to make it stand out
+            emissiveColor = new THREE.Color(0xffffff).multiplyScalar(0.3);
+        }
+        
         const wireMaterial = new THREE.MeshStandardMaterial({
             color: wireColor,
             metalness: 0.4,
             roughness: 0.6,
-            emissive: wireColor === 0x000000 ? 0x000000 : new THREE.Color(wireColor).multiplyScalar(0.1),
+            emissive: emissiveColor,
         });
         
         const wire = new THREE.Mesh(wireGeometry, wireMaterial);
         wire.rotation.z = Math.PI / 2;
         wire.position.set(xPos, yPos, 0.62); // On the front face of the box, positioned in the module panel
         wire.userData = { index, color, isCut, moduleIndex };
+        
+        // Add outline for white wires to improve visibility
+        if (wireColor === 0xffffff) {
+            const outlineGeometry = new THREE.CylinderGeometry(0.032, 0.032, wireLength, 12);
+            const outlineMaterial = new THREE.MeshBasicMaterial({
+                color: 0x000000, // Black outline for white
+                side: THREE.BackSide,
+            });
+            const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+            outline.rotation.z = Math.PI / 2;
+            outline.position.set(xPos, yPos, 0.62);
+            wireGroup.add(outline);
+        }
         
         if (isCut) {
             wire.material.opacity = 0.2;

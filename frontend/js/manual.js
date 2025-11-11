@@ -39,9 +39,31 @@ class ManualDisplay {
         rulesContainer.innerHTML = '';
         if (wireModule.rules && Array.isArray(wireModule.rules)) {
             wireModule.rules.forEach(rule => {
+                // Skip empty rules (used for spacing)
+                if (!rule.description || rule.description.trim() === '') {
+                    const spacingDiv = document.createElement('div');
+                    spacingDiv.className = 'rule-spacing';
+                    spacingDiv.style.height = '20px';
+                    rulesContainer.appendChild(spacingDiv);
+                    return;
+                }
+                
                 const ruleDiv = document.createElement('div');
                 ruleDiv.className = 'rule';
-                ruleDiv.innerHTML = `<span class="rule-number">Rule ${rule.number}:</span> ${rule.description}`;
+                
+                // Check if it's a section header (starts with ===)
+                if (rule.description.startsWith('===')) {
+                    ruleDiv.className = 'rule-section-header';
+                    ruleDiv.style.fontWeight = 'bold';
+                    ruleDiv.style.fontSize = '1.2em';
+                    ruleDiv.style.marginTop = '20px';
+                    ruleDiv.style.marginBottom = '10px';
+                    ruleDiv.style.color = '#4ecdc4';
+                    ruleDiv.textContent = rule.description;
+                } else {
+                    ruleDiv.innerHTML = `<span class="rule-number">Rule ${rule.number}:</span> ${rule.description}`;
+                }
+                
                 rulesContainer.appendChild(ruleDiv);
             });
         }
