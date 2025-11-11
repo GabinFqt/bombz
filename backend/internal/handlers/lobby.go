@@ -14,11 +14,13 @@ type LobbyData struct {
 	ModuleCount     int               `json:"moduleCount"`
 	DefuserID       string            `json:"defuserId"`
 	IsRandomDefuser bool              `json:"isRandomDefuser"`
+	TimeLimit       int               `json:"timeLimit"`
 }
 
 // PlayerData represents player information in lobby data
 type PlayerData struct {
 	ID       string            `json:"id"`
+	Name     string            `json:"name"`
 	Type     models.PlayerType `json:"type"`
 	JoinedAt string            `json:"joinedAt"`
 }
@@ -38,10 +40,14 @@ func buildLobbyData(session *models.GameSession, playerID string) *LobbyData {
 	for _, player := range playersMap {
 		players = append(players, PlayerData{
 			ID:       player.ID,
+			Name:     player.Name,
 			Type:     player.Type,
 			JoinedAt: player.JoinedAt.Format(time.RFC3339),
 		})
 	}
+
+	// Get time limit safely
+	timeLimit := session.GetTimeLimit()
 
 	lobbyData := &LobbyData{
 		State:           state,
@@ -50,6 +56,7 @@ func buildLobbyData(session *models.GameSession, playerID string) *LobbyData {
 		ModuleCount:     moduleCount,
 		DefuserID:       defuserID,
 		IsRandomDefuser: isRandomDefuser,
+		TimeLimit:       timeLimit,
 	}
 
 	// Include playerID if provided

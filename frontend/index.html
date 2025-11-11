@@ -10,47 +10,43 @@
     <div id="app">
         <div id="lobby-container" style="display: none;">
             <div class="lobby-content">
-                <h1>Lobby</h1>
-                <div id="lobby-session-info">
-                    <p>Session ID: <span id="lobby-session-id">-</span></p>
-                    <p id="lobby-host-indicator" style="display: none; color: #4CAF50; font-weight: bold;">You are the host</p>
+                <div id="lobby-header">
+                    <h1>Lobby</h1>
+                    <div id="lobby-session-info">
+                        <p>Session ID: <span id="lobby-session-id">-</span></p>
+                        <p id="lobby-host-indicator" style="display: none; color: #4CAF50; font-weight: bold;">You are the host</p>
+                    </div>
                 </div>
                 
                 <div id="lobby-players-section">
-                    <h2>Players (<span id="player-count">0</span>)</h2>
-                    <ul id="player-list"></ul>
+                    <div id="player-cards-container"></div>
+                    <div id="random-defuser-btn-container" style="display: none;">
+                        <button id="random-defuser-btn" class="random-btn">Random Defuser</button>
+                    </div>
                 </div>
                 
                 <div id="lobby-host-controls" style="display: none;">
-                    <h2>Game Settings</h2>
-                    
-                    <div class="lobby-setting">
-                        <label for="module-count-select">Number of Modules:</label>
-                        <select id="module-count-select">
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                            <option value="6" selected>6</option>
-                        </select>
+                    <div class="lobby-settings-group">
+                        <h3>Number of Modules</h3>
+                        <div class="circular-buttons" id="module-count-buttons">
+                            <button class="circular-btn" data-value="1">1</button>
+                            <button class="circular-btn" data-value="2">2</button>
+                            <button class="circular-btn" data-value="3">3</button>
+                            <button class="circular-btn" data-value="4">4</button>
+                            <button class="circular-btn" data-value="5">5</button>
+                            <button class="circular-btn active" data-value="6">6</button>
+                        </div>
                     </div>
                     
-                    <div class="lobby-setting">
-                        <label>Defuser Selection:</label>
-                        <div>
-                            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                <input type="radio" name="defuser-selection" value="random" checked>
-                                <span>Random</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 10px;">
-                                <input type="radio" name="defuser-selection" value="designate">
-                                <span>Designate</span>
-                            </label>
+                    <div class="lobby-settings-group">
+                        <h3>Time Limit (minutes)</h3>
+                        <div class="circular-buttons" id="time-limit-buttons">
+                            <button class="circular-btn" data-value="1">1</button>
+                            <button class="circular-btn" data-value="2">2</button>
+                            <button class="circular-btn" data-value="3">3</button>
+                            <button class="circular-btn" data-value="4">4</button>
+                            <button class="circular-btn active" data-value="5">5</button>
                         </div>
-                        <select id="defuser-select" style="display: none; margin-top: 10px; width: 100%;">
-                            <option value="">Select a player...</option>
-                        </select>
                     </div>
                     
                     <button id="start-game-btn" disabled>Start Game</button>

@@ -59,31 +59,44 @@ function setupMenuHandlers() {
         }
     });
     
-    // Lobby controls
-    document.getElementById('module-count-select').addEventListener('change', (e) => {
-        if (currentHostId && currentSessionId) {
+    // Lobby controls - circular buttons for module count
+    document.querySelectorAll('#module-count-buttons .circular-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if (!isHost || !currentHostId || !currentSessionId) return;
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('#module-count-buttons .circular-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            
+            // Add active class to clicked button
+            e.target.classList.add('active');
+            
             updateLobbySettings();
-        }
-    });
-    
-    document.querySelectorAll('input[name="defuser-selection"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            const defuserSelect = document.getElementById('defuser-select');
-            if (e.target.value === 'designate') {
-                defuserSelect.style.display = 'block';
-            } else {
-                defuserSelect.style.display = 'none';
-            }
-            if (currentHostId && currentSessionId) {
-                updateLobbySettings();
-            }
         });
     });
     
-    document.getElementById('defuser-select').addEventListener('change', () => {
-        if (currentHostId && currentSessionId) {
+    // Lobby controls - circular buttons for time limit
+    document.querySelectorAll('#time-limit-buttons .circular-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if (!isHost || !currentHostId || !currentSessionId) return;
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('#time-limit-buttons .circular-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            
+            // Add active class to clicked button
+            e.target.classList.add('active');
+            
             updateLobbySettings();
-        }
+        });
+    });
+    
+    // Random defuser button
+    document.getElementById('random-defuser-btn').addEventListener('click', () => {
+        if (!isHost || !currentHostId || !currentSessionId) return;
+        selectRandomDefuser();
     });
     
     document.getElementById('start-game-btn').addEventListener('click', () => {
@@ -217,18 +230,74 @@ function renderLobby(lobby, isHostParam) {
         hostIndicator.style.display = 'none';
     }
     
-    // Update player list
-    const playerList = document.getElementById('player-list');
-    const playerCount = document.getElementById('player-count');
-    playerList.innerHTML = '';
-    playerCount.textContent = lobby.players ? lobby.players.length : 0;
+    // Render player cards
+    const playerCardsContainer = document.getElementById('player-cards-container');
+    playerCardsContainer.innerHTML = '';
     
     if (lobby.players) {
         lobby.players.forEach(player => {
-            const li = document.createElement('li');
-            li.textContent = `${player.id} (${player.type})`;
-            playerList.appendChild(li);
+            const card = document.createElement('div');
+            card.className = 'player-card';
+            card.dataset.playerId = player.id;
+            
+            // Add defuser class if this player is the defuser
+            if (!lobby.isRandomDefuser && lobby.defuserId === player.id) {
+                card.classList.add('is-defuser');
+            }
+            
+            // Player name input
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'player-name-input';
+            nameInput.value = player.name || player.id;
+            nameInput.dataset.playerId = player.id;
+            
+            // Only allow editing own name
+            if (player.id !== currentPlayerId) {
+                nameInput.disabled = true;
+            }
+            
+            // Debounced name update
+            let nameUpdateTimeout = null;
+            nameInput.addEventListener('input', (e) => {
+                clearTimeout(nameUpdateTimeout);
+                nameUpdateTimeout = setTimeout(() => {
+                    const newName = e.target.value.trim();
+                    if (newName && newName !== player.name) {
+                        updatePlayerName(newName);
+                    }
+                }, 500);
+            });
+            
+            // Player type indicator
+            const typeIndicator = document.createElement('div');
+            typeIndicator.className = 'player-type';
+            typeIndicator.textContent = player.type || 'player';
+            
+            card.appendChild(nameInput);
+            card.appendChild(typeIndicator);
+            
+            // Select as defuser button (only visible to host)
+            if (isHost) {
+                const selectBtn = document.createElement('button');
+                selectBtn.className = 'select-defuser-btn';
+                selectBtn.textContent = 'Select as Defuser';
+                selectBtn.addEventListener('click', () => {
+                    selectDefuser(player.id);
+                });
+                card.appendChild(selectBtn);
+            }
+            
+            playerCardsContainer.appendChild(card);
         });
+    }
+    
+    // Show/hide random defuser button (only for host)
+    const randomDefuserBtnContainer = document.getElementById('random-defuser-btn-container');
+    if (isHost) {
+        randomDefuserBtnContainer.style.display = 'block';
+    } else {
+        randomDefuserBtnContainer.style.display = 'none';
     }
     
     // Update host controls
@@ -239,33 +308,24 @@ function renderLobby(lobby, isHostParam) {
         hostControls.style.display = 'block';
         waitingMessage.style.display = 'none';
         
-        // Update module count selector
-        document.getElementById('module-count-select').value = lobby.moduleCount || Config.DEFAULT_MODULE_COUNT;
+        // Update module count buttons
+        const moduleButtons = document.querySelectorAll('#module-count-buttons .circular-btn');
+        moduleButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (parseInt(btn.dataset.value) === (lobby.moduleCount || Config.DEFAULT_MODULE_COUNT)) {
+                btn.classList.add('active');
+            }
+        });
         
-        // Update defuser selection
-        const defuserSelect = document.getElementById('defuser-select');
-        defuserSelect.innerHTML = '<option value="">Select a player...</option>';
-        
-        if (lobby.players) {
-            lobby.players.forEach(player => {
-                const option = document.createElement('option');
-                option.value = player.id;
-                option.textContent = `${player.id} (${player.type})`;
-                if (lobby.defuserId === player.id) {
-                    option.selected = true;
-                }
-                defuserSelect.appendChild(option);
-            });
-        }
-        
-        // Update radio buttons
-        if (lobby.isRandomDefuser) {
-            document.querySelector('input[name="defuser-selection"][value="random"]').checked = true;
-            defuserSelect.style.display = 'none';
-        } else {
-            document.querySelector('input[name="defuser-selection"][value="designate"]').checked = true;
-            defuserSelect.style.display = 'block';
-        }
+        // Update time limit buttons (convert seconds to minutes)
+        const timeLimitMinutes = Math.floor((lobby.timeLimit || Config.DEFAULT_TIME_LIMIT) / 60);
+        const timeButtons = document.querySelectorAll('#time-limit-buttons .circular-btn');
+        timeButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (parseInt(btn.dataset.value) === timeLimitMinutes) {
+                btn.classList.add('active');
+            }
+        });
         
         // Update start button
         const startBtn = document.getElementById('start-game-btn');
@@ -285,14 +345,24 @@ async function updateLobbySettings() {
     if (!currentHostId || !currentSessionId) return;
     
     try {
-        const moduleCount = parseInt(document.getElementById('module-count-select').value);
-        const defuserSelection = document.querySelector('input[name="defuser-selection"]:checked').value;
-        const defuserSelect = document.getElementById('defuser-select');
+        // Get module count from active button
+        const activeModuleBtn = document.querySelector('#module-count-buttons .circular-btn.active');
+        const moduleCount = activeModuleBtn ? parseInt(activeModuleBtn.dataset.value) : Config.DEFAULT_MODULE_COUNT;
+        
+        // Get time limit from active button (convert minutes to seconds)
+        const activeTimeBtn = document.querySelector('#time-limit-buttons .circular-btn.active');
+        const timeLimitMinutes = activeTimeBtn ? parseInt(activeTimeBtn.dataset.value) : Math.floor(Config.DEFAULT_TIME_LIMIT / 60);
+        const timeLimit = timeLimitMinutes * 60;
+        
+        // Get current defuser settings from lobby state
+        const isRandomDefuser = lobbyState ? lobbyState.isRandomDefuser : false;
+        const defuserId = lobbyState && !lobbyState.isRandomDefuser ? lobbyState.defuserId : '';
         
         const settings = {
             moduleCount: moduleCount,
-            isRandomDefuser: defuserSelection === 'random',
-            defuserId: defuserSelection === 'designate' ? defuserSelect.value : '',
+            isRandomDefuser: isRandomDefuser,
+            defuserId: defuserId,
+            timeLimit: timeLimit,
         };
         
         // Send via WebSocket if connected, otherwise via API
@@ -304,6 +374,55 @@ async function updateLobbySettings() {
     } catch (error) {
         console.error('Error updating lobby settings:', error);
         alert('Failed to update lobby settings. Please try again.');
+    }
+}
+
+function selectDefuser(playerId) {
+    if (!isHost || !currentHostId || !currentSessionId) return;
+    
+    const settings = {
+        moduleCount: lobbyState ? lobbyState.moduleCount : Config.DEFAULT_MODULE_COUNT,
+        isRandomDefuser: false,
+        defuserId: playerId,
+        timeLimit: lobbyState ? lobbyState.timeLimit : Config.DEFAULT_TIME_LIMIT,
+    };
+    
+    // Send via WebSocket if connected, otherwise via API
+    if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
+        websocketClient.sendLobbySettings(settings);
+    } else {
+        apiClient.updateLobbySettings(currentSessionId, currentHostId, settings).catch(error => {
+            console.error('Error selecting defuser:', error);
+        });
+    }
+}
+
+function selectRandomDefuser() {
+    if (!isHost || !currentHostId || !currentSessionId) return;
+    
+    const settings = {
+        moduleCount: lobbyState ? lobbyState.moduleCount : Config.DEFAULT_MODULE_COUNT,
+        isRandomDefuser: true,
+        defuserId: '',
+        timeLimit: lobbyState ? lobbyState.timeLimit : Config.DEFAULT_TIME_LIMIT,
+    };
+    
+    // Send via WebSocket if connected, otherwise via API
+    if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
+        websocketClient.sendLobbySettings(settings);
+    } else {
+        apiClient.updateLobbySettings(currentSessionId, currentHostId, settings).catch(error => {
+            console.error('Error selecting random defuser:', error);
+        });
+    }
+}
+
+function updatePlayerName(name) {
+    if (!currentPlayerId || !name || name.trim() === '') return;
+    
+    // Send via WebSocket if connected
+    if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
+        websocketClient.sendUpdatePlayerName(name.trim());
     }
 }
 

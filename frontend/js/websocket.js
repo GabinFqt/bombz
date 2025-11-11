@@ -157,6 +157,16 @@ class WebSocketClient {
         });
     }
     
+    sendUpdatePlayerName(name) {
+        this.send({
+            type: 'updatePlayerName',
+            sessionId: this.sessionId,
+            data: {
+                name: name,
+            },
+        });
+    }
+    
     sendStartGame() {
         this.send({
             type: 'startGame',

@@ -27,6 +27,7 @@ const (
 // Player represents a connected player
 type Player struct {
 	ID       string    `json:"id"`
+	Name     string    `json:"name"`     // Display name (defaults to ID if not set)
 	Type     PlayerType `json:"type"`
 	Conn     *Connection `json:"-"`
 	JoinedAt time.Time `json:"joinedAt"`
@@ -63,8 +64,8 @@ func NewGameSession(id string, hostID string, timeLimit int) *GameSession {
 		LobbyState:      LobbyStateWaiting,
 		HostID:          hostID,
 		ModuleCount:     6, // Default 6 modules
-		DefuserID:       "",
-		IsRandomDefuser: true, // Default to random defuser
+		DefuserID:       hostID, // Default defuser is the host
+		IsRandomDefuser: false, // Default to host as defuser
 		TimeLimit:       timeLimit,
 	}
 }
@@ -76,6 +77,7 @@ func (gs *GameSession) AddPlayer(playerID string, playerType PlayerType, conn *C
 	
 	gs.Players[playerID] = &Player{
 		ID:       playerID,
+		Name:     playerID, // Default name to player ID
 		Type:     playerType,
 		Conn:     conn,
 		JoinedAt: time.Now(),
@@ -151,6 +153,19 @@ func (gs *GameSession) SetDefuser(defuserID string, isRandom bool) {
 	
 	gs.DefuserID = defuserID
 	gs.IsRandomDefuser = isRandom
+}
+
+// SetTimeLimit sets the time limit in seconds (60-300)
+func (gs *GameSession) SetTimeLimit(seconds int) error {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	
+	if seconds < 60 || seconds > 300 {
+		return fmt.Errorf("time limit must be between 60 and 300 seconds")
+	}
+	
+	gs.TimeLimit = seconds
+	return nil
 }
 
 // StartGame creates the bomb and transitions to active state
@@ -252,6 +267,13 @@ func (gs *GameSession) GetHostID() string {
 	return gs.HostID
 }
 
+// GetTimeLimit returns the time limit in a thread-safe way
+func (gs *GameSession) GetTimeLimit() int {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+	return gs.TimeLimit
+}
+
 // GetPlayersCopy returns a copy of the players map in a thread-safe way
 func (gs *GameSession) GetPlayersCopy() map[string]*Player {
 	gs.mu.RLock()
@@ -262,6 +284,24 @@ func (gs *GameSession) GetPlayersCopy() map[string]*Player {
 		playersCopy[id] = player
 	}
 	return playersCopy
+}
+
+// SetPlayerName sets the display name for a player
+func (gs *GameSession) SetPlayerName(playerID string, name string) error {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	
+	player, exists := gs.Players[playerID]
+	if !exists {
+		return fmt.Errorf("player not found")
+	}
+	
+	if name == "" {
+		return fmt.Errorf("player name cannot be empty")
+	}
+	
+	player.Name = name
+	return nil
 }
 
 // Update updates the bomb state (time remaining, etc.)

@@ -43,11 +43,13 @@ type LobbyStateResponse struct {
 	ModuleCount     int               `json:"moduleCount"`
 	DefuserID       string            `json:"defuserId"`
 	IsRandomDefuser bool              `json:"isRandomDefuser"`
+	TimeLimit       int               `json:"timeLimit"`
 }
 
 // PlayerInfo represents player information in lobby
 type PlayerInfo struct {
 	ID       string            `json:"id"`
+	Name     string            `json:"name"`
 	Type     models.PlayerType `json:"type"`
 	JoinedAt string            `json:"joinedAt"`
 }
@@ -68,6 +70,7 @@ type UpdateLobbySettingsRequest struct {
 	ModuleCount     int    `json:"moduleCount"` // 1-6
 	DefuserID       string `json:"defuserId"`   // Empty if random
 	IsRandomDefuser bool   `json:"isRandomDefuser"`
+	TimeLimit       int    `json:"timeLimit"` // Time limit in seconds (60-300)
 }
 
 // StartGameRequest represents a request to start the game
@@ -233,6 +236,14 @@ func (h *GameHandler) UpdateLobbySettings(w http.ResponseWriter, r *http.Request
 	// Update defuser settings
 	session.SetDefuser(req.DefuserID, req.IsRandomDefuser)
 
+	// Update time limit
+	if req.TimeLimit > 0 {
+		if err := session.SetTimeLimit(req.TimeLimit); err != nil {
+			WriteBadRequest(w, err.Error())
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.buildLobbyStateResponse(session))
 }
@@ -316,10 +327,14 @@ func (h *GameHandler) buildLobbyStateResponse(session *models.GameSession) *Lobb
 	for _, p := range lobbyData.Players {
 		players = append(players, &PlayerInfo{
 			ID:       p.ID,
+			Name:     p.Name,
 			Type:     p.Type,
 			JoinedAt: p.JoinedAt,
 		})
 	}
+
+	// Get time limit from session
+	timeLimit := session.GetTimeLimit()
 
 	return &LobbyStateResponse{
 		State:           lobbyData.State,
@@ -328,5 +343,6 @@ func (h *GameHandler) buildLobbyStateResponse(session *models.GameSession) *Lobb
 		ModuleCount:     lobbyData.ModuleCount,
 		DefuserID:       lobbyData.DefuserID,
 		IsRandomDefuser: lobbyData.IsRandomDefuser,
+		TimeLimit:       timeLimit,
 	}
 }

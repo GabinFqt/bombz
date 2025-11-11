@@ -244,9 +244,10 @@ func (h *WebSocketHandler) handleMessage(conn *websocket.Conn, session *models.G
 		}
 		
 		var data struct {
-			ModuleCount    int    `json:"moduleCount"`
-			DefuserID      string `json:"defuserId"`
-			IsRandomDefuser bool  `json:"isRandomDefuser"`
+			ModuleCount     int    `json:"moduleCount"`
+			DefuserID       string `json:"defuserId"`
+			IsRandomDefuser bool   `json:"isRandomDefuser"`
+			TimeLimit       int    `json:"timeLimit"`
 		}
 		if err := json.Unmarshal(msg.Data, &data); err != nil {
 			return
@@ -261,6 +262,13 @@ func (h *WebSocketHandler) handleMessage(conn *websocket.Conn, session *models.G
 		
 		// Update defuser settings
 		session.SetDefuser(data.DefuserID, data.IsRandomDefuser)
+		
+		// Update time limit
+		if data.TimeLimit > 0 {
+			if err := session.SetTimeLimit(data.TimeLimit); err != nil {
+				return
+			}
+		}
 		
 		// Broadcast lobby update
 		h.broadcastLobbyUpdate(session)
@@ -343,6 +351,32 @@ func (h *WebSocketHandler) handleMessage(conn *websocket.Conn, session *models.G
 		h.broadcastReturnedToLobby(session)
 		
 		// Broadcast updated lobby state
+		h.broadcastLobbyUpdate(session)
+		
+	case "updatePlayerName":
+		// Allow any player to rename themselves, but only in waiting state
+		if session.GetLobbyState() != models.LobbyStateWaiting {
+			return
+		}
+		
+		var data struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(msg.Data, &data); err != nil {
+			return
+		}
+		
+		// Validate name is not empty
+		if data.Name == "" {
+			return
+		}
+		
+		// Update player name
+		if err := session.SetPlayerName(playerID, data.Name); err != nil {
+			return
+		}
+		
+		// Broadcast lobby update
 		h.broadcastLobbyUpdate(session)
 		
 	case "ping":
