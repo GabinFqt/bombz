@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bombs/internal/models"
+	"sort"
 	"time"
 )
 
@@ -45,6 +46,26 @@ func buildLobbyData(session *models.GameSession, playerID string) *LobbyData {
 			JoinedAt: player.JoinedAt.Format(time.RFC3339),
 		})
 	}
+
+	// Sort players: host first, then by JoinedAt (most recent first)
+	sort.Slice(players, func(i, j int) bool {
+		// Host always comes first
+		if players[i].ID == hostID && players[j].ID != hostID {
+			return true
+		}
+		if players[i].ID != hostID && players[j].ID == hostID {
+			return false
+		}
+		// If both are host or both are not host, sort by JoinedAt (most recent first)
+		timeI, errI := time.Parse(time.RFC3339, players[i].JoinedAt)
+		timeJ, errJ := time.Parse(time.RFC3339, players[j].JoinedAt)
+		if errI != nil || errJ != nil {
+			// If parsing fails, maintain original order
+			return false
+		}
+		// Most recent first (descending order)
+		return timeI.After(timeJ)
+	})
 
 	// Get time limit safely
 	timeLimit := session.GetTimeLimit()

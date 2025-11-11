@@ -269,13 +269,7 @@ function renderLobby(lobby, isHostParam) {
                 }, 500);
             });
             
-            // Player type indicator
-            const typeIndicator = document.createElement('div');
-            typeIndicator.className = 'player-type';
-            typeIndicator.textContent = player.type || 'player';
-            
             card.appendChild(nameInput);
-            card.appendChild(typeIndicator);
             
             // Select as defuser button (only visible to host)
             if (isHost) {
