@@ -333,6 +333,13 @@ button:active {
     font-size: 14px;
 }
 
+#lobby-session-id {
+    font-size: 48px;
+    font-weight: bold;
+    color: #4ecdc4;
+    letter-spacing: 4px;
+}
+
 #lobby-players-section {
     width: 100%;
     display: flex;
@@ -519,9 +526,12 @@ button:active {
 }
 
 #start-game-btn {
-    margin-top: 10px;
+    margin-top: 60px;
     padding: 15px 40px;
     font-size: 18px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 #start-game-btn:disabled {
