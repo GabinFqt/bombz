@@ -18,10 +18,10 @@ func NewGameService() *GameService {
 	gs := &GameService{
 		sessions: make(map[string]*models.GameSession),
 	}
-	
+
 	// Start background task to update bomb timers
 	go gs.updateLoop()
-	
+
 	return gs
 }
 
@@ -29,7 +29,7 @@ func NewGameService() *GameService {
 func (gs *GameService) CreateSession(sessionID string, hostID string, timeLimit int) *models.GameSession {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
-	
+
 	session := models.NewGameSession(sessionID, hostID, timeLimit)
 	gs.sessions[sessionID] = session
 	return session
@@ -40,11 +40,11 @@ func (gs *GameService) StartGame(sessionID string) error {
 	gs.mu.RLock()
 	session, exists := gs.sessions[sessionID]
 	gs.mu.RUnlock()
-	
+
 	if !exists {
 		return fmt.Errorf("session not found")
 	}
-	
+
 	return session.StartGame()
 }
 
@@ -53,15 +53,15 @@ func (gs *GameService) ReturnToLobby(sessionID string, hostID string) error {
 	gs.mu.RLock()
 	session, exists := gs.sessions[sessionID]
 	gs.mu.RUnlock()
-	
+
 	if !exists {
 		return fmt.Errorf("session not found")
 	}
-	
+
 	if !session.IsHost(hostID) {
 		return fmt.Errorf("only host can return to lobby")
 	}
-	
+
 	return session.ReturnToLobby()
 }
 
@@ -69,7 +69,7 @@ func (gs *GameService) ReturnToLobby(sessionID string, hostID string) error {
 func (gs *GameService) GetSession(sessionID string) (*models.GameSession, bool) {
 	gs.mu.RLock()
 	defer gs.mu.RUnlock()
-	
+
 	session, exists := gs.sessions[sessionID]
 	return session, exists
 }
@@ -78,7 +78,7 @@ func (gs *GameService) GetSession(sessionID string) (*models.GameSession, bool) 
 func (gs *GameService) updateLoop() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		gs.mu.RLock()
 		sessions := make([]*models.GameSession, 0, len(gs.sessions))
@@ -86,11 +86,10 @@ func (gs *GameService) updateLoop() {
 			sessions = append(sessions, session)
 		}
 		gs.mu.RUnlock()
-		
+
 		for _, session := range sessions {
 			session.Update()
 			// The WebSocket handler's broadcastLoop handles broadcasting updates
 		}
 	}
 }
-

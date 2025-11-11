@@ -22,8 +22,10 @@ class WebSocketClient {
         
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.hostname;
-        const port = window.location.port || Config.DEFAULT_PORT;
-        let wsUrl = `${protocol}//${host}:${port}/ws/${this.sessionId}`;
+        // Only include port if explicitly set in URL (for development) or if it's not the default port
+        // When behind reverse proxy (HTTPS), window.location.port is empty, so we use the same host/port as the page
+        const port = window.location.port ? `:${window.location.port}` : '';
+        let wsUrl = `${protocol}//${host}${port}/ws/${this.sessionId}`;
         if (this.hostId) {
             wsUrl += `?hostId=${encodeURIComponent(this.hostId)}`;
         }
