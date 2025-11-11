@@ -316,28 +316,44 @@ class Bomb3D {
     handleClick(event) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
-        // Check all modules' wires
-        let allWires = [];
+        // Check all modules' wires - use recursive traversal to include all children (wire mesh and outline)
+        let allWireGroups = [];
         this.wires.forEach(moduleWires => {
             if (moduleWires) {
-                allWires = allWires.concat(moduleWires);
+                allWireGroups = allWireGroups.concat(moduleWires);
             }
         });
         
-        const intersects = this.raycaster.intersectObjects(allWires);
+        // Use recursive: true to check all children (including outline meshes for white wires)
+        const intersects = this.raycaster.intersectObjects(allWireGroups, true);
         
         if (intersects.length > 0) {
-            const clickedWire = intersects[0].object.parent;
-            const wireIndex = clickedWire.userData.index;
-            const moduleIndex = clickedWire.userData.moduleIndex;
+            // Find the wireGroup by traversing up the parent chain
+            // This handles cases where we click on the outline mesh (for white wires) or the wire mesh itself
+            let clickedObject = intersects[0].object;
+            let wireGroup = null;
             
-            if (!clickedWire.userData.isCut) {
-                // Highlight wire
-                this.highlightWire(moduleIndex, wireIndex);
+            // Traverse up to find the wireGroup (which has userData with index, color, etc.)
+            while (clickedObject) {
+                if (clickedObject.userData && clickedObject.userData.index !== undefined && clickedObject.userData.moduleIndex !== undefined) {
+                    wireGroup = clickedObject;
+                    break;
+                }
+                clickedObject = clickedObject.parent;
+            }
+            
+            if (wireGroup && wireGroup.userData) {
+                const wireIndex = wireGroup.userData.index;
+                const moduleIndex = wireGroup.userData.moduleIndex;
                 
-                // Trigger wire cut event
-                if (window.onWireCut) {
-                    window.onWireCut(moduleIndex, wireIndex);
+                if (!wireGroup.userData.isCut) {
+                    // Highlight wire
+                    this.highlightWire(moduleIndex, wireIndex);
+                    
+                    // Trigger wire cut event
+                    if (window.onWireCut) {
+                        window.onWireCut(moduleIndex, wireIndex);
+                    }
                 }
             }
         }
@@ -347,8 +363,10 @@ class Bomb3D {
         // Remove previous highlight
         if (this.selectedModule !== null && this.selectedWire !== null) {
             if (this.wires[this.selectedModule] && this.wires[this.selectedModule][this.selectedWire]) {
-                const prevWire = this.wires[this.selectedModule][this.selectedWire].children[0];
-                prevWire.material.emissive.setHex(0x000000);
+                const prevWire = this.findWireMesh(this.wires[this.selectedModule][this.selectedWire]);
+                if (prevWire && prevWire.material && prevWire.material.emissive) {
+                    prevWire.material.emissive.setHex(0x000000);
+                }
             }
         }
         
@@ -356,22 +374,39 @@ class Bomb3D {
         if (this.wires[moduleIndex] && wireIndex >= 0 && wireIndex < this.wires[moduleIndex].length) {
             this.selectedModule = moduleIndex;
             this.selectedWire = wireIndex;
-            const wire = this.wires[moduleIndex][wireIndex].children[0];
-            // Make wire glow by setting emissive to a brighter version
-            const r = wire.material.color.r * 0.4;
-            const g = wire.material.color.g * 0.4;
-            const b = wire.material.color.b * 0.4;
-            wire.material.emissive.setRGB(r, g, b);
+            const wire = this.findWireMesh(this.wires[moduleIndex][wireIndex]);
+            if (wire && wire.material && wire.material.emissive) {
+                // Make wire glow by setting emissive to a brighter version
+                const r = wire.material.color.r * 0.4;
+                const g = wire.material.color.g * 0.4;
+                const b = wire.material.color.b * 0.4;
+                wire.material.emissive.setRGB(r, g, b);
+            }
         }
+    }
+    
+    // Helper function to find the wire mesh (not the outline) in a wireGroup
+    findWireMesh(wireGroup) {
+        for (let child of wireGroup.children) {
+            // The wire mesh uses MeshStandardMaterial (which has emissive)
+            // The outline uses MeshBasicMaterial (which doesn't have emissive)
+            if (child.material && child.material.emissive !== undefined) {
+                return child;
+            }
+        }
+        // Fallback: return first child if no mesh with emissive found
+        return wireGroup.children[0];
     }
     
     markWireAsCut(moduleIndex, wireIndex) {
         if (this.wires[moduleIndex] && wireIndex >= 0 && wireIndex < this.wires[moduleIndex].length) {
-            const wire = this.wires[moduleIndex][wireIndex].children[0];
-            wire.material.opacity = 0.2;
-            wire.material.transparent = true;
-            wire.userData.isCut = true;
-            this.wires[moduleIndex][wireIndex].userData.isCut = true;
+            const wire = this.findWireMesh(this.wires[moduleIndex][wireIndex]);
+            if (wire && wire.material) {
+                wire.material.opacity = 0.2;
+                wire.material.transparent = true;
+                wire.userData.isCut = true;
+                this.wires[moduleIndex][wireIndex].userData.isCut = true;
+            }
         }
     }
     
