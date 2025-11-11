@@ -136,6 +136,7 @@ class Bomb3D {
         const startY = totalHeight / 2 - panelHeight / 2;
         
         this.modulePanels = [];
+        this.moduleGlows = []; // Store glow rings for each module
         
         for (let row = 0; row < 2; row++) {
             for (let col = 0; col < 3; col++) {
@@ -164,7 +165,26 @@ class Bomb3D {
                 border.position.set(x, y, 0.605);
                 this.scene.add(border);
                 
+                // Create glow border for module (initially invisible)
+                // Use a slightly larger plane positioned behind the module to create a glow effect
+                const glowWidth = panelWidth + 0.15;
+                const glowHeight = panelHeight + 0.15;
+                const glowGeometry = new THREE.PlaneGeometry(glowWidth, glowHeight);
+                const glowMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x00ff00,
+                    emissive: 0x00ff00,
+                    emissiveIntensity: 0,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    depthWrite: false, // Don't write to depth buffer so it doesn't occlude
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                glow.position.set(x, y, 0.608); // Slightly behind the module
+                this.scene.add(glow);
+                
                 this.modulePanels.push({ panel, border, x, y, row, col });
+                this.moduleGlows.push({ glow, material: glowMaterial });
             }
         }
         
@@ -349,6 +369,61 @@ class Bomb3D {
         this.camera.updateProjectionMatrix();
         
         this.renderer.setSize(width, height);
+    }
+    
+    // Show green glow around module when solved
+    showModuleSuccess(moduleIndex) {
+        if (!this.moduleGlows || moduleIndex < 0 || moduleIndex >= this.moduleGlows.length) {
+            return;
+        }
+        
+        const glowData = this.moduleGlows[moduleIndex];
+        if (!glowData) return;
+        
+        // Set green color and make visible
+        glowData.material.color.setHex(0x00ff00);
+        glowData.material.emissive.setHex(0x00ff00);
+        glowData.material.emissiveIntensity = 1.0;
+        glowData.material.opacity = 0.8;
+    }
+    
+    // Show red flash around module for 1 second when strike occurs
+    showModuleStrike(moduleIndex) {
+        if (!this.moduleGlows || moduleIndex < 0 || moduleIndex >= this.moduleGlows.length) {
+            return;
+        }
+        
+        const glowData = this.moduleGlows[moduleIndex];
+        if (!glowData) return;
+        
+        // Set red color
+        glowData.material.color.setHex(0xff0000);
+        glowData.material.emissive.setHex(0xff0000);
+        glowData.material.emissiveIntensity = 2.0;
+        glowData.material.opacity = 1.0;
+        
+        // Animate fade out over 1 second
+        const startTime = Date.now();
+        const duration = 1000; // 1 second
+        
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Fade out
+            glowData.material.opacity = 1.0 - progress;
+            glowData.material.emissiveIntensity = 2.0 * (1.0 - progress);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Reset to invisible
+                glowData.material.opacity = 0;
+                glowData.material.emissiveIntensity = 0;
+            }
+        };
+        
+        animate();
     }
 }
 
