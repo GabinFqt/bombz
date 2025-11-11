@@ -15,14 +15,15 @@ const (
 
 // Bomb represents the bomb with its modules and state
 type Bomb struct {
-	ID            string         `json:"id"`
-	State         BombState      `json:"state"`
-	Strikes       int            `json:"strikes"`
-	MaxStrikes    int            `json:"maxStrikes"`
-	TimeRemaining int            `json:"timeRemaining"` // seconds
-	TimeLimit     int            `json:"-"`             // initial time limit (not serialized)
-	StartTime     time.Time      `json:"startTime"`
-	WiresModules  []*WiresModule `json:"wiresModules"` // 6 wire modules
+	ID            string                    `json:"id"`
+	State         BombState                 `json:"state"`
+	Strikes       int                       `json:"strikes"`
+	MaxStrikes    int                       `json:"maxStrikes"`
+	TimeRemaining int                       `json:"timeRemaining"` // seconds
+	TimeLimit     int                       `json:"-"`             // initial time limit (not serialized)
+	StartTime     time.Time                 `json:"startTime"`
+	WiresModules  []*WiresModule             `json:"wiresModules"` // 6 wire modules
+	ModuleRules   map[string]*ModuleManual `json:"moduleRules"`   // Rules for each module type
 }
 
 // NewBomb creates a new bomb with initial configuration
@@ -35,10 +36,17 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		moduleCount = 6
 	}
 	
-	// Create wire modules
+	// Generate rules for wire modules
+	wireRuleSet, wireModuleManual := GenerateWireModuleRules()
+	
+	// Store module rules
+	moduleRules := make(map[string]*ModuleManual)
+	moduleRules["wireModule"] = wireModuleManual
+	
+	// Create wire modules with the generated rules
 	wiresModules := make([]*WiresModule, moduleCount)
 	for i := 0; i < moduleCount; i++ {
-		wiresModules[i] = NewWiresModule()
+		wiresModules[i] = NewWiresModuleWithRules(wireRuleSet)
 	}
 
 	return &Bomb{
@@ -50,6 +58,7 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		TimeLimit:     timeLimit,
 		StartTime:     time.Now(),
 		WiresModules:  wiresModules,
+		ModuleRules:   moduleRules,
 	}
 }
 
