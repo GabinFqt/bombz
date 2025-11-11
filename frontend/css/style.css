@@ -270,14 +270,6 @@ button:active {
 .wire-color.white { background: #ffffff; border: 2px solid #000; }
 .wire-color.yellow { background: #ffff00; }
 
-#manual-bomb-status {
-    background: #2a2a2a;
-    padding: 20px;
-    margin: 20px 0;
-    border-radius: 5px;
-    border: 2px solid #4ecdc4;
-}
-
 .wire-module-display {
     background: #2a2a2a;
     padding: 15px;
