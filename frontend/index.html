@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bombz</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="lobby-container" style="display: none;">
+            <div class="lobby-content">
+                <h1>Lobby</h1>
+                <div id="lobby-session-info">
+                    <p>Session ID: <span id="lobby-session-id">-</span></p>
+                    <p id="lobby-host-indicator" style="display: none; color: #4CAF50; font-weight: bold;">You are the host</p>
+                </div>
+                
+                <div id="lobby-players-section">
+                    <h2>Players (<span id="player-count">0</span>)</h2>
+                    <ul id="player-list"></ul>
+                </div>
+                
+                <div id="lobby-host-controls" style="display: none;">
+                    <h2>Game Settings</h2>
+                    
+                    <div class="lobby-setting">
+                        <label for="module-count-select">Number of Modules:</label>
+                        <select id="module-count-select">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6" selected>6</option>
+                        </select>
+                    </div>
+                    
+                    <div class="lobby-setting">
+                        <label>Defuser Selection:</label>
+                        <div>
+                            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <input type="radio" name="defuser-selection" value="random" checked>
+                                <span>Random</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="radio" name="defuser-selection" value="designate">
+                                <span>Designate</span>
+                            </label>
+                        </div>
+                        <select id="defuser-select" style="display: none; margin-top: 10px; width: 100%;">
+                            <option value="">Select a player...</option>
+                        </select>
+                    </div>
+                    
+                    <button id="start-game-btn" disabled>Start Game</button>
+                    <p id="start-game-error" style="color: #ff6b6b; display: none;"></p>
+                </div>
+                
+                <div id="lobby-waiting-message" style="margin-top: 20px; color: #666;">
+                    <p>Waiting for host to start the game...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="game-container" style="display: none;">
+            <div id="hud">
+                <div id="timer">
+                    <span id="time-display">00:00</span>
+                </div>
+                <div id="strikes">
+                    <span>Strikes: </span>
+                    <span id="strikes-count">0</span>
+                    <span>/3</span>
+                </div>
+                <div id="game-status">
+                    <span id="status-text">Active</span>
+                </div>
+            </div>
+            <div id="canvas-container">
+                <canvas id="bomb-canvas"></canvas>
+            </div>
+            <div id="controls">
+                <div id="session-info">
+                    <p>Session ID: <span id="session-id">-</span></p>
+                    <p>Player ID: <span id="player-id">-</span></p>
+                </div>
+                <div id="connection-status">
+                    <span id="connection-indicator" class="disconnected">●</span>
+                    <span id="connection-text">Disconnected</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="manual-container" style="display: none;">
+            <div id="manual-content">
+                <div id="manual-session-info" class="session-info">
+                    <p>Session ID: <span id="manual-session-id">-</span></p>
+                    <p>Connection: <span id="manual-connection-status">Disconnected</span></p>
+                </div>
+                
+                <h1 id="manual-title">Bombz Manual - Wires Module</h1>
+                
+                <div id="manual-wires-section">
+                    <h2>Wires Module Rules</h2>
+                    <div id="manual-rules"></div>
+                </div>
+                
+                <div id="manual-wire-colors-section">
+                    <h2>Wire Colors</h2>
+                    <div id="manual-wire-colors"></div>
+                </div>
+                
+                <div id="manual-bomb-status-section" style="display: none;">
+                    <h2>Bomb Status</h2>
+                    <div id="manual-bomb-status"></div>
+                </div>
+                
+                <div id="manual-instructions-section">
+                    <h2>Instructions</h2>
+                    <p id="manual-instructions"></p>
+                </div>
+            </div>
+        </div>
+        <div id="game-end-overlay" class="overlay" style="display: none;">
+            <div class="menu-content">
+                <h1 id="game-end-title">Game Over</h1>
+                <div id="game-end-result"></div>
+                <div id="game-end-host-controls" style="display: none; margin-top: 20px;">
+                    <button id="return-to-lobby-btn">Go Back to Lobby</button>
+                </div>
+                <div id="game-end-waiting-message" style="margin-top: 20px; color: #666;">
+                    <p>Waiting for host to return to lobby...</p>
+                </div>
+            </div>
+        </div>
+        <div id="menu" class="overlay">
+            <div class="menu-content">
+                <h1>Bombz</h1>
+                <div id="menu-buttons">
+                    <button id="create-game-btn">Create Game</button>
+                    <div id="join-form" style="margin-top: 20px;">
+                        <input type="text" id="session-id-input" placeholder="Enter Session ID to join">
+                        <button id="join-submit-btn" style="margin-top: 10px;">Join Game</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+    <script>
+        // Verify Three.js loaded
+        window.addEventListener('load', () => {
+            if (typeof THREE === 'undefined') {
+                console.error('Failed to load Three.js from CDN');
+                alert('Error: Three.js could not be loaded. Please check your internet connection.');
+            }
+        });
+    </script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/bomb3d.js"></script>
+    <script src="js/wiresModule.js"></script>
+    <script src="js/manual.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
+
