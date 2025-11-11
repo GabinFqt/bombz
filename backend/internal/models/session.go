@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+	
+	"bombs/internal/utils"
 )
 
 // PlayerType represents the type of player
@@ -75,9 +77,16 @@ func (gs *GameSession) AddPlayer(playerID string, playerType PlayerType, conn *C
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
 	
+	// Generate a random default name (word + 2 digits)
+	defaultName, err := utils.GeneratePlayerName()
+	if err != nil {
+		// Fallback to player ID if name generation fails
+		defaultName = playerID
+	}
+	
 	gs.Players[playerID] = &Player{
 		ID:       playerID,
-		Name:     playerID, // Default name to player ID
+		Name:     defaultName,
 		Type:     playerType,
 		Conn:     conn,
 		JoinedAt: time.Now(),

@@ -61,3 +61,31 @@ func GeneratePlayerID() (string, error) {
 	return fmt.Sprintf("player-%s", id), nil
 }
 
+// GeneratePlayerName generates a random player name from a word list plus 2 digits
+func GeneratePlayerName() (string, error) {
+	words := []string{
+		"Alpha", "Beta", "Gamma", "Delta", "Echo", "Foxtrot", "Golf", "Hotel",
+		"India", "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa",
+		"Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "Xray",
+		"Yankee", "Zulu", "Ace", "King", "Queen", "Jack", "Joker", "Wild",
+	}
+	
+	// Pick a random word
+	max := big.NewInt(int64(len(words)))
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate random word: %w", err)
+	}
+	word := words[n.Int64()]
+	
+	// Generate 2 random digits (00-99)
+	digitMax := big.NewInt(100)
+	digitN, err := rand.Int(rand.Reader, digitMax)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate random digits: %w", err)
+	}
+	digits := fmt.Sprintf("%02d", digitN.Int64())
+	
+	return fmt.Sprintf("%s%s", word, digits), nil
+}
+
