@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  bombs-server:
+    build: .
+    container_name: bombs-server
+    ports:
+      - "127.0.0.1:5555:5555"  # Only expose on localhost, Nginx will proxy
+    environment:
+      - PORT=5555
+      - CORS_ORIGIN=https://bombz.gab1.fr
+    restart: unless-stopped
+    networks:
+      - bombs-network
+
+networks:
+  bombs-network:
+    driver: bridge

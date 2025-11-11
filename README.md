@@ -41,21 +41,25 @@ A browser-based implementation of Bombz, featuring a 3D bomb with wire modules a
    go run cmd/server/main.go
    ```
 
-   The server will start on port 8080 by default. You can change this by setting the `PORT` environment variable.
+   The server will start on port 5555 by default. You can change this by setting the `PORT` environment variable.
 
 ### Frontend Setup
 
 The frontend is served by the backend server. Simply open your browser and navigate to:
 
 ```
-http://localhost:8080
+http://localhost:5555
 ```
+
+## Deployment
+
+For production deployment on a home server with Docker and Nginx, see [DEPLOY.md](DEPLOY.md).
 
 ## How to Play
 
-1. **Defuser**: Open `http://localhost:8080` and create a new game or join an existing session.
+1. **Defuser**: Open `http://localhost:5555` and create a new game or join an existing session.
 
-2. **Expert**: Open `http://localhost:8080/manual.html?sessionId=<SESSION_ID>` in a separate window/tab, replacing `<SESSION_ID>` with the session ID from the defuser's screen.
+2. **Expert**: Open `http://localhost:5555/manual.html?sessionId=<SESSION_ID>` in a separate window/tab, replacing `<SESSION_ID>` with the session ID from the defuser's screen.
 
 3. The defuser sees the 3D bomb and must cut wires based on instructions from the expert.
 
