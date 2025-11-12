@@ -18,6 +18,11 @@ class ManualDisplay {
         if (manualContent.wireModule) {
             this.renderWireModuleManual(manualContent.wireModule);
         }
+        
+        // Render single button module manual from modules map
+        if (manualContent.modules && manualContent.modules['buttonModule']) {
+            this.renderButtonModuleManual(manualContent.modules['buttonModule'], 'Button Module');
+        }
 
     }
 
@@ -88,6 +93,61 @@ class ManualDisplay {
         }
     }
 
+    // Render button module manual rules
+    renderButtonModuleManual(buttonModule, moduleTitle) {
+        // Create or find container for button modules
+        let buttonSection = document.getElementById('manual-buttons-section');
+        if (!buttonSection) {
+            buttonSection = document.createElement('div');
+            buttonSection.id = 'manual-buttons-section';
+            const manualContent = document.getElementById('manual-content');
+            if (manualContent) {
+                // Insert after wire colors section
+                const wireColorsSection = document.getElementById('manual-wire-colors-section');
+                if (wireColorsSection && wireColorsSection.nextSibling) {
+                    manualContent.insertBefore(buttonSection, wireColorsSection.nextSibling);
+                } else {
+                    manualContent.appendChild(buttonSection);
+                }
+            }
+        }
+        
+        // Clear existing content
+        buttonSection.innerHTML = '';
+        
+        // Add title
+        const titleElement = document.createElement('h2');
+        titleElement.textContent = moduleTitle || 'Button Module Rules';
+        buttonSection.appendChild(titleElement);
+        
+        const rulesContainer = document.createElement('div');
+        rulesContainer.className = 'button-rules';
+        
+        // Render rules
+        if (buttonModule.rules && Array.isArray(buttonModule.rules)) {
+            buttonModule.rules.forEach(rule => {
+                if (!rule.description || rule.description.trim() === '') {
+                    return; // Skip empty rules
+                }
+                
+                const ruleDiv = document.createElement('div');
+                ruleDiv.className = 'rule';
+                ruleDiv.innerHTML = `<span class="rule-number">Rule ${rule.number}:</span> ${rule.description}`;
+                rulesContainer.appendChild(ruleDiv);
+            });
+        }
+        
+        buttonSection.appendChild(rulesContainer);
+        
+        // Render instructions if available
+        if (buttonModule.instructions) {
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'button-instructions';
+            instructionsDiv.style.marginTop = '15px';
+            instructionsDiv.textContent = buttonModule.instructions;
+            buttonSection.appendChild(instructionsDiv);
+        }
+    }
 
     // Update connection status
     updateConnectionStatus(connected) {

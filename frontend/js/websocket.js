@@ -102,6 +102,12 @@ class WebSocketClient {
                     this.onMessageCallbacks.forEach(callback => callback(message));
                 }
                 break;
+            case 'buttonActionResult':
+                const buttonResult = this.parseMessageData(message.data, 'buttonActionResult');
+                if (buttonResult !== null) {
+                    this.onMessageCallbacks.forEach(callback => callback(message));
+                }
+                break;
             case 'pong':
                 // Heartbeat response
                 break;
@@ -143,6 +149,36 @@ class WebSocketClient {
             data: {
                 moduleIndex: moduleIndex,
                 wireIndex: wireIndex,
+            },
+        });
+    }
+    
+    pressButton(moduleIndex) {
+        this.send({
+            type: 'buttonPress',
+            sessionId: this.sessionId,
+            data: {
+                moduleIndex: moduleIndex,
+            },
+        });
+    }
+    
+    holdButton(moduleIndex) {
+        this.send({
+            type: 'buttonHold',
+            sessionId: this.sessionId,
+            data: {
+                moduleIndex: moduleIndex,
+            },
+        });
+    }
+    
+    releaseButton(moduleIndex) {
+        this.send({
+            type: 'buttonRelease',
+            sessionId: this.sessionId,
+            data: {
+                moduleIndex: moduleIndex,
             },
         });
     }

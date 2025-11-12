@@ -2,6 +2,7 @@
 let bomb3d = null;
 let websocketClient = null;
 let wiresModule = null;
+let buttonModule = null;
 let currentSessionId = null;
 let currentPlayerId = null;
 let currentHostId = null;
@@ -473,6 +474,9 @@ function transitionToGame() {
     // Initialize wires module
     wiresModule = new WiresModule(bomb3d, websocketClient);
     
+    // Initialize button module
+    buttonModule = new ButtonModule(bomb3d, websocketClient);
+    
     // Listen for game state updates to detect game end
     websocketClient.onStateUpdate((bombState) => {
         if (bombState.state === 'defused' || bombState.state === 'exploded') {
@@ -488,6 +492,9 @@ function transitionToGame() {
     // Request initial game state (with playerId if available for role-specific content)
     apiClient.getGameState(currentSessionId, currentPlayerId).then(bombState => {
         wiresModule.updateBombState(bombState);
+        if (buttonModule) {
+            buttonModule.updateBombState(bombState);
+        }
         // Check if game is already ended
         if (bombState.state === 'defused' || bombState.state === 'exploded') {
             showGameEnd(bombState.state);

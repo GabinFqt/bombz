@@ -24,7 +24,8 @@ type Bomb struct {
 	TimeRemaining int                       `json:"timeRemaining"` // seconds
 	TimeLimit     int                       `json:"-"`             // initial time limit (not serialized)
 	StartTime     time.Time                 `json:"startTime"`
-	WiresModules  []*WiresModule             `json:"wiresModules"` // 6 wire modules
+	WiresModules  []*WiresModule             `json:"wiresModules"` // Wire modules
+	ButtonModules []*ButtonModule            `json:"buttonModules"` // Button modules
 	ModuleRules   map[string]*ModuleManual `json:"moduleRules"`   // Rules for each module type
 	Seed          int64                     `json:"seed"`          // Random seed used for rule generation (ensures manual and modules are aligned)
 }
@@ -43,13 +44,18 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 	// This seed will be used for both manual and module rules to ensure they are aligned
 	seed := rand.Int63()
 	
+	// Randomly split moduleCount between wire and button modules
+	// Create a seeded RNG for module type distribution
+	moduleTypeRNG := rand.New(rand.NewSource(seed))
+	numWireModules := moduleTypeRNG.Intn(moduleCount + 1) // 0 to moduleCount
+	numButtonModules := moduleCount - numWireModules
+	
 	// Store module rules - each module will have its own manual
 	moduleRules := make(map[string]*ModuleManual)
 	
 	// Create wire modules - each generates its own rules based on wire count using the random seed
-	// Each module uses seed + moduleIndex to ensure different wire configurations while keeping rules aligned
-	wiresModules := make([]*WiresModule, moduleCount)
-	for i := 0; i < moduleCount; i++ {
+	wiresModules := make([]*WiresModule, numWireModules)
+	for i := 0; i < numWireModules; i++ {
 		// Use seed + moduleIndex to differentiate each module's wire generation
 		// But still use the base seed for rules to match the manual
 		moduleSeed := seed + int64(i)*1000000 // Large multiplier to avoid overlap with rule seeds
@@ -58,6 +64,18 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		
 		// Store manual with module index key (e.g., "wireModule0", "wireModule1")
 		moduleRules[fmt.Sprintf("wireModule%d", i)] = moduleManual
+	}
+	
+	// Create button modules - each generates its own rules using the random seed
+	buttonModules := make([]*ButtonModule, numButtonModules)
+	for i := 0; i < numButtonModules; i++ {
+		// Use seed + offset + moduleIndex to differentiate each module's button generation
+		buttonSeed := seed + int64(10000000) + int64(i)*1000000 // Different offset from wire modules
+		module, moduleManual := NewButtonModuleWithRules(buttonSeed, seed)
+		buttonModules[i] = module
+		
+		// Store manual with module index key (e.g., "buttonModule0", "buttonModule1")
+		moduleRules[fmt.Sprintf("buttonModule%d", i)] = moduleManual
 	}
 
 	return &Bomb{
@@ -69,12 +87,14 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		TimeLimit:     timeLimit,
 		StartTime:     time.Now(),
 		WiresModules:  wiresModules,
+		ButtonModules: buttonModules,
 		ModuleRules:   moduleRules,
 		Seed:          seed,
 	}
 }
 
 // UpdateTimeRemaining updates the time remaining based on elapsed time
+// Also updates gauge colors for button modules
 func (b *Bomb) UpdateTimeRemaining() {
 	if b.State != BombStateActive {
 		return
@@ -86,7 +106,11 @@ func (b *Bomb) UpdateTimeRemaining() {
 	if b.TimeRemaining <= 0 {
 		b.State = BombStateExploded
 		b.TimeRemaining = 0
+		return
 	}
+
+	// Gauge colors are now static and only shown when button is pressed
+	// No need to update them here
 }
 
 // AddStrike adds a strike to the bomb
@@ -124,13 +148,112 @@ func (b *Bomb) CutWire(moduleIndex int, wireIndex int) bool {
 	return true
 }
 
+// PressButton handles pressing a button in a specific button module
+func (b *Bomb) PressButton(moduleIndex int) bool {
+	if b.State != BombStateActive {
+		return false
+	}
+
+	if moduleIndex < 0 || moduleIndex >= len(b.ButtonModules) {
+		return false // Invalid module index
+	}
+
+	module := b.ButtonModules[moduleIndex]
+	if module == nil {
+		return false
+	}
+	if module.IsSolved {
+		return false // Already solved
+	}
+
+	correct := module.PressButton()
+	if !correct {
+		b.AddStrike()
+		return false
+	}
+
+	// Check if all modules are solved
+	b.CheckWinCondition()
+
+	return true
+}
+
+// HoldButton handles holding a button in a specific button module
+func (b *Bomb) HoldButton(moduleIndex int) bool {
+	if b.State != BombStateActive {
+		return false
+	}
+
+	if moduleIndex < 0 || moduleIndex >= len(b.ButtonModules) {
+		return false // Invalid module index
+	}
+
+	module := b.ButtonModules[moduleIndex]
+	if module == nil {
+		return false
+	}
+	if module.IsSolved {
+		return false // Already solved
+	}
+
+	correct := module.HoldButton()
+	if !correct {
+		b.AddStrike()
+		return false
+	}
+
+	return true
+}
+
+// ReleaseButton handles releasing a button in a specific button module
+func (b *Bomb) ReleaseButton(moduleIndex int) bool {
+	if b.State != BombStateActive {
+		return false
+	}
+
+	if moduleIndex < 0 || moduleIndex >= len(b.ButtonModules) {
+		return false // Invalid module index
+	}
+
+	module := b.ButtonModules[moduleIndex]
+	if module == nil {
+		return false
+	}
+	if module.IsSolved {
+		return false // Already solved
+	}
+
+	correct := module.ReleaseButton(b.TimeRemaining)
+	if !correct {
+		b.AddStrike()
+		return false
+	}
+
+	// Check if all modules are solved
+	b.CheckWinCondition()
+
+	return true
+}
+
 // CheckWinCondition checks if the bomb is defused
 func (b *Bomb) CheckWinCondition() {
 	allSolved := true
+	
+	// Check wire modules
 	for _, module := range b.WiresModules {
-		if !module.IsSolved {
+		if module != nil && !module.IsSolved {
 			allSolved = false
 			break
+		}
+	}
+	
+	// Check button modules
+	if allSolved {
+		for _, module := range b.ButtonModules {
+			if module != nil && !module.IsSolved {
+				allSolved = false
+				break
+			}
 		}
 	}
 

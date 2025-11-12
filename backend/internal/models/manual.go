@@ -471,6 +471,261 @@ func generateWireModuleRulesWithRNG(numWires int, rng *rand.Rand, seed int64) (*
 	return &WireRuleSet{Rules: rules}, moduleManual
 }
 
+// ButtonRuleResult represents the result of evaluating a button rule
+type ButtonRuleResult struct {
+	Action           ButtonAction
+	WaitForGauge     GaugeColor
+	TargetTimerDigit int // Which timer digit to wait for (0-9)
+}
+
+// ButtonRuleEvaluator is a function that evaluates a condition on button text and color
+// Returns nil if condition doesn't match, or ButtonRuleResult if it matches
+type ButtonRuleEvaluator func(text ButtonText, color ButtonColor) *ButtonRuleResult
+
+// ButtonRule represents a rule with both description and evaluator function
+type ButtonRule struct {
+	Number      int                 `json:"number"`
+	Description string              `json:"description"`
+	Evaluator   ButtonRuleEvaluator `json:"-"` // Not serialized, used for evaluation
+}
+
+// ButtonRuleSet contains the rules with evaluators for a button module
+type ButtonRuleSet struct {
+	Rules                []ButtonRule       `json:"-"`
+	GaugeColorToDigitMap map[GaugeColor]int `json:"-"` // Maps gauge color to timer digit (same for all buttons in game)
+}
+
+// GenerateButtonModuleRulesWithSeed generates random rules for button modules with a specific seed for determinism
+func GenerateButtonModuleRulesWithSeed(seed int64) (*ButtonRuleSet, *ModuleManual) {
+	// Create a new random source with the given seed
+	rng := rand.New(rand.NewSource(seed))
+
+	// Pools of all possible conditions (button text + color combinations)
+	// These only check if the condition matches - action (press/hold) is randomly assigned
+	allConditions := []struct {
+		name  string
+		text  ButtonText
+		color ButtonColor
+	}{
+		{
+			name:  "button says \"ABORT\" and is red",
+			text:  ButtonTextAbort,
+			color: ButtonColorRed,
+		},
+		{
+			name:  "button says \"DETONATE\" and is white",
+			text:  ButtonTextDetonate,
+			color: ButtonColorWhite,
+		},
+		{
+			name:  "button says \"HOLD\" and is blue",
+			text:  ButtonTextHold,
+			color: ButtonColorBlue,
+		},
+		{
+			name:  "button says \"PRESS\" and is red",
+			text:  ButtonTextPress,
+			color: ButtonColorRed,
+		},
+		{
+			name:  "button says \"OTHER\" and is any color",
+			text:  ButtonTextOther,
+			color: "", // Any color
+		},
+		// Additional random combinations
+		{
+			name:  "button says \"ABORT\" and is blue",
+			text:  ButtonTextAbort,
+			color: ButtonColorBlue,
+		},
+		{
+			name:  "button says \"DETONATE\" and is red",
+			text:  ButtonTextDetonate,
+			color: ButtonColorRed,
+		},
+		{
+			name:  "button says \"HOLD\" and is red",
+			text:  ButtonTextHold,
+			color: ButtonColorRed,
+		},
+		{
+			name:  "button says \"PRESS\" and is blue",
+			text:  ButtonTextPress,
+			color: ButtonColorBlue,
+		},
+		{
+			name:  "button says \"ABORT\" and is white",
+			text:  ButtonTextAbort,
+			color: ButtonColorWhite,
+		},
+	}
+
+	// Generate gauge color -> timer digit mapping rules (separate rule set)
+	// This determines which timer digit to wait for based on gauge color
+	gaugeColorToDigitRules := make(map[GaugeColor]int)
+	gaugeColors := []GaugeColor{GaugeColorRed, GaugeColorBlue, GaugeColorWhite}
+
+	// Create deterministic mapping: each gauge color maps to a specific timer digit
+	for _, gaugeColor := range gaugeColors {
+		// Use different seed offsets for each gauge color to ensure deterministic but different mappings
+		var colorSeedOffset int64
+		switch gaugeColor {
+		case GaugeColorRed:
+			colorSeedOffset = 100
+		case GaugeColorBlue:
+			colorSeedOffset = 200
+		case GaugeColorWhite:
+			colorSeedOffset = 300
+		}
+		colorDigitRNG := rand.New(rand.NewSource(seed + 777777 + colorSeedOffset))
+		gaugeColorToDigitRules[gaugeColor] = colorDigitRNG.Intn(10)
+	}
+
+	// Generate 3-5 random rules using the seeded RNG
+	numRules := rng.Intn(3) + 3 // 3-5 rules
+	rules := make([]ButtonRule, 0, numRules)
+	manualRules := make([]ManualRule, 0, numRules+1)
+
+	// Track used condition indices to avoid duplicates
+	usedConditions := make(map[int]bool)
+
+	for i := 0; i < numRules; i++ {
+		// Pick a random condition (avoid duplicates) using seeded RNG
+		var condIndex int
+		for {
+			condIndex = rng.Intn(len(allConditions))
+			if !usedConditions[condIndex] {
+				usedConditions[condIndex] = true
+				break
+			}
+			if len(usedConditions) >= len(allConditions) {
+				break
+			}
+		}
+
+		condition := allConditions[condIndex]
+
+		// Randomly assign action type (press or hold) for this condition
+		// Use a deterministic seed based on condition index to ensure same assignment per game
+		actionRNG := rand.New(rand.NewSource(seed + int64(condIndex*1000)))
+		actionType := ButtonActionHold
+		if actionRNG.Intn(2) == 0 { // 50% chance for press, 50% for hold
+			actionType = ButtonActionPress
+		}
+
+		// Create evaluator that only checks the condition and returns the action
+		// Gauge color will be randomly selected when button is pressed (for hold actions)
+		finalEvaluator := func(text ButtonText, color ButtonColor) *ButtonRuleResult {
+			// Check if condition matches
+			matches := false
+			if condition.color == "" {
+				// "Any color" condition - only check text
+				matches = (text == condition.text)
+			} else {
+				// Specific color condition - check both text and color
+				matches = (text == condition.text && color == condition.color)
+			}
+
+			if matches {
+				return &ButtonRuleResult{
+					Action:           actionType,
+					WaitForGauge:     "", // Will be randomly selected when button is pressed
+					TargetTimerDigit: 0,  // Will be set based on randomly selected gauge color
+				}
+			}
+			return nil
+		}
+
+		// Create description
+		var description string
+		if actionType == ButtonActionPress {
+			description = fmt.Sprintf("If %s, press and release immediately.", condition.name)
+		} else {
+			description = fmt.Sprintf("If %s, hold the button. When pressed, a random gauge color will appear.", condition.name)
+		}
+
+		rules = append(rules, ButtonRule{
+			Number:      i + 1,
+			Description: description,
+			Evaluator:   finalEvaluator,
+		})
+
+		manualRules = append(manualRules, ManualRule{
+			Number:      i + 1,
+			Description: description,
+		})
+	}
+
+	// Add default rule: hold (gauge color will be randomly selected when pressed)
+	defaultDescription := "Otherwise, hold the button. When pressed, a random gauge color will appear."
+
+	manualRules = append(manualRules, ManualRule{
+		Number:      len(manualRules) + 1,
+		Description: defaultDescription,
+	})
+
+	// Create default rule evaluator (matches any condition not covered by specific rules)
+	defaultEvaluator := func(text ButtonText, color ButtonColor) *ButtonRuleResult {
+		return &ButtonRuleResult{
+			Action:           ButtonActionHold,
+			WaitForGauge:     "", // Will be randomly selected when button is pressed
+			TargetTimerDigit: 0,  // Will be set based on randomly selected gauge color
+		}
+	}
+
+	rules = append(rules, ButtonRule{
+		Number:      len(rules) + 1,
+		Description: defaultDescription,
+		Evaluator:   defaultEvaluator,
+	})
+
+	// Add gauge color -> timer digit mapping rules to manual
+	gaugeDigitRules := []ManualRule{}
+	ruleNum := len(manualRules) + 1
+	gaugeDigitRules = append(gaugeDigitRules, ManualRule{
+		Number:      ruleNum,
+		Description: "=== Gauge Color to Timer Digit Mapping ===",
+	})
+	ruleNum++
+
+	for _, gaugeColor := range gaugeColors {
+		digit := gaugeColorToDigitRules[gaugeColor]
+		gaugeDigitRules = append(gaugeDigitRules, ManualRule{
+			Number:      ruleNum,
+			Description: fmt.Sprintf("If gauge shows %s, release when timer's last digit is %d.", gaugeColor, digit),
+		})
+		ruleNum++
+	}
+
+	// Combine button rules and gauge digit rules
+	allManualRules := append(manualRules, gaugeDigitRules...)
+
+	// Create ModuleManual
+	moduleManual := &ModuleManual{
+		Title:        "Bombz Manual - Button Module",
+		Rules:        allManualRules,
+		Instructions: "As an expert, your job is to guide the defuser through the button module using these rules. First, look at the button text and color to determine if you should press immediately or hold. If holding, when the button is pressed, a random gauge color (red, white, or blue) will appear. Use the gauge color mapping rules to determine which timer digit to wait for. Release the button when the timer's last digit matches the specified value.",
+		ModuleData: map[string]interface{}{
+			"buttonTexts":  []string{"ABORT", "DETONATE", "HOLD", "PRESS", "OTHER"},
+			"buttonColors": []string{"red", "blue", "white"},
+			"gaugeColors":  []string{"red", "blue", "white"},
+		},
+	}
+
+	return &ButtonRuleSet{
+		Rules:                rules,
+		GaugeColorToDigitMap: gaugeColorToDigitRules,
+	}, moduleManual
+}
+
+// GenerateComprehensiveButtonModuleManual generates a single comprehensive manual for all button modules
+// Uses a seed to ensure deterministic generation (rules don't change)
+func GenerateComprehensiveButtonModuleManual(seed int64) *ModuleManual {
+	// Generate rules using the seed - all button modules will use the same rules
+	_, moduleManual := GenerateButtonModuleRulesWithSeed(seed)
+	return moduleManual
+}
+
 // GetWireModuleManual returns the manual content for the wires module
 func GetWireModuleManual() *WireModuleManual {
 	// Use a default seed for static manual
@@ -513,6 +768,13 @@ func GetManualContent(bomb *Bomb) *ManualContent {
 		ModuleData: map[string]interface{}{
 			"wireColors": content.WireModule.WireColors,
 		},
+	}
+
+	// Add single comprehensive button module manual if bomb has button modules
+	if bomb != nil && len(bomb.ButtonModules) > 0 {
+		// Generate one comprehensive manual for all button modules (they all use the same rules)
+		buttonManual := GenerateComprehensiveButtonModuleManual(seed)
+		content.Modules["buttonModule"] = buttonManual
 	}
 
 	return content

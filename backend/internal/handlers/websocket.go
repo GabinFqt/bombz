@@ -233,6 +233,108 @@ func (h *WebSocketHandler) handleMessage(conn *websocket.Conn, session *models.G
 			}
 		}
 		
+	case "buttonPress":
+		// Only allow pressing buttons if game is active
+		if session.GetLobbyState() != models.LobbyStateActive || session.Bomb == nil {
+			return
+		}
+		
+		var data struct {
+			ModuleIndex int `json:"moduleIndex"`
+		}
+		if err := json.Unmarshal(msg.Data, &data); err != nil {
+			return
+		}
+		
+		correct := session.Bomb.PressButton(data.ModuleIndex)
+		
+		// Broadcast updated state to all players
+		h.broadcastGameState(session)
+		
+		// Send response to the player who pressed the button via their connection channel
+		player, exists := session.GetPlayer(playerID)
+		if exists && player.Conn != nil {
+			response := WebSocketMessage{
+				Type:     "buttonActionResult",
+				PlayerID: playerID,
+				Data:     mustMarshal(map[string]interface{}{"correct": correct, "moduleIndex": data.ModuleIndex, "action": "press"}),
+			}
+			responseBytes, _ := json.Marshal(response)
+			select {
+			case player.Conn.Send <- responseBytes:
+			default:
+				// Channel full, skip
+			}
+		}
+		
+	case "buttonHold":
+		// Only allow holding buttons if game is active
+		if session.GetLobbyState() != models.LobbyStateActive || session.Bomb == nil {
+			return
+		}
+		
+		var data struct {
+			ModuleIndex int `json:"moduleIndex"`
+		}
+		if err := json.Unmarshal(msg.Data, &data); err != nil {
+			return
+		}
+		
+		correct := session.Bomb.HoldButton(data.ModuleIndex)
+		
+		// Broadcast updated state to all players (gauge colors may have changed)
+		h.broadcastGameState(session)
+		
+		// Send response to the player who is holding the button via their connection channel
+		player, exists := session.GetPlayer(playerID)
+		if exists && player.Conn != nil {
+			response := WebSocketMessage{
+				Type:     "buttonActionResult",
+				PlayerID: playerID,
+				Data:     mustMarshal(map[string]interface{}{"correct": correct, "moduleIndex": data.ModuleIndex, "action": "hold"}),
+			}
+			responseBytes, _ := json.Marshal(response)
+			select {
+			case player.Conn.Send <- responseBytes:
+			default:
+				// Channel full, skip
+			}
+		}
+		
+	case "buttonRelease":
+		// Only allow releasing buttons if game is active
+		if session.GetLobbyState() != models.LobbyStateActive || session.Bomb == nil {
+			return
+		}
+		
+		var data struct {
+			ModuleIndex int `json:"moduleIndex"`
+		}
+		if err := json.Unmarshal(msg.Data, &data); err != nil {
+			return
+		}
+		
+		correct := session.Bomb.ReleaseButton(data.ModuleIndex)
+		
+		// Broadcast updated state to all players
+		h.broadcastGameState(session)
+		
+		// Send response to the player who released the button via their connection channel
+		player, exists := session.GetPlayer(playerID)
+		if exists && player.Conn != nil {
+			response := WebSocketMessage{
+				Type:     "buttonActionResult",
+				PlayerID: playerID,
+				Data:     mustMarshal(map[string]interface{}{"correct": correct, "moduleIndex": data.ModuleIndex, "action": "release"}),
+			}
+			responseBytes, _ := json.Marshal(response)
+			select {
+			case player.Conn.Send <- responseBytes:
+			default:
+				// Channel full, skip
+			}
+		}
+		
 	case "updateLobbySettings":
 		// Only allow host to update settings, and only in waiting state
 		if session.GetLobbyState() != models.LobbyStateWaiting {
