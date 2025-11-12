@@ -1,0 +1,17 @@
+# Go
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# IDE
+.vscode/
+*~
+
+
+# Build artifacts
+backend/bin/
+backend/dist/
+

@@ -1,0 +1,11 @@
+backend/main
+backend/cmd/server/main
+.git
+.gitignore
+README.md
+DEPLOY.md
+*.md
+.DS_Store
+docker-compose.yml
+nginx.conf
+

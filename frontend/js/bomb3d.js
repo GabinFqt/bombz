@@ -9,6 +9,7 @@ class Bomb3D {
         this.bombGroup = null; // Group to rotate the entire bomb
         this.wiresModule = null;
         this.wires = []; // Array of arrays: wires[moduleIndex] = array of wires for that module
+        this.wiresModulesState = null; // Store wiresModules state to check if modules are solved
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.selectedWire = null;
@@ -36,6 +37,9 @@ class Bomb3D {
         
         // Module hover state
         this.hoveredModuleIndex = null;
+        
+        // Wire hover state
+        this.hoveredWire = null; // { moduleIndex: number, wireIndex: number } or null
         
         this.init();
         this.setupEventListeners();
@@ -304,6 +308,9 @@ class Bomb3D {
     }
     
     updateWires(wiresModules) {
+        // Store wiresModules state to check if modules are solved
+        this.wiresModulesState = wiresModules;
+        
         // Remove all existing wires
         this.wires.forEach(moduleWires => {
             moduleWires.forEach(wire => {
@@ -432,9 +439,12 @@ class Bomb3D {
             this.lastMouseX = event.clientX;
             this.lastMouseY = event.clientY;
             
-            // Module hover detection
+            // Module hover detection (only when not zoomed)
             if (!this.isZoomed) {
                 this.handleModuleHover();
+            } else {
+                // Wire hover detection (only when zoomed)
+                this.handleWireHover();
             }
         });
         
@@ -543,6 +553,156 @@ class Bomb3D {
         }
     }
     
+    handleWireHover() {
+        if (!this.isZoomed || this.zoomedModuleIndex === null) {
+            return;
+        }
+        
+        // Check if module is solved - don't allow hover on solved modules
+        if (this.wiresModulesState && 
+            this.wiresModulesState[this.zoomedModuleIndex] && 
+            this.wiresModulesState[this.zoomedModuleIndex].isSolved) {
+            // Module is solved, clear hover if any
+            if (this.hoveredWire !== null) {
+                this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+                this.hoveredWire = null;
+                this.container.style.cursor = 'default';
+            }
+            return;
+        }
+        
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        
+        // Only check wires from the zoomed module
+        const moduleWires = this.wires[this.zoomedModuleIndex];
+        if (!moduleWires || moduleWires.length === 0) {
+            // No wires in this module, clear hover if any
+            if (this.hoveredWire !== null) {
+                this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+                this.hoveredWire = null;
+                this.container.style.cursor = 'default';
+            }
+            return;
+        }
+        
+        // Collect all wire meshes (not groups) for more reliable intersection
+        // Traverse the scene graph to get all meshes, including nested ones
+        const wireMeshes = [];
+        moduleWires.forEach(wireGroup => {
+            wireGroup.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    // Include all meshes for better detection
+                    wireMeshes.push(child);
+                }
+            });
+        });
+        
+        // Get intersections - check all meshes for better detection
+        const intersects = this.raycaster.intersectObjects(wireMeshes, true);
+        
+        if (intersects.length > 0) {
+            let hoveredObject = intersects[0].object;
+            let wireGroup = null;
+            
+            // Traverse up to find the wireGroup (which has the userData with index and moduleIndex)
+            while (hoveredObject) {
+                if (hoveredObject.userData && hoveredObject.userData.index !== undefined && hoveredObject.userData.moduleIndex !== undefined) {
+                    wireGroup = hoveredObject;
+                    break;
+                }
+                hoveredObject = hoveredObject.parent;
+            }
+            
+            // If we didn't find it in the object itself, check if parent is the wireGroup
+            if (!wireGroup && intersects[0].object.parent) {
+                const parent = intersects[0].object.parent;
+                if (parent.userData && parent.userData.index !== undefined && parent.userData.moduleIndex !== undefined) {
+                    wireGroup = parent;
+                }
+            }
+            
+            if (wireGroup && wireGroup.userData) {
+                const wireIndex = wireGroup.userData.index;
+                const moduleIndex = wireGroup.userData.moduleIndex;
+                
+                // Check if this is a different wire than currently hovered
+                if (this.hoveredWire === null || 
+                    this.hoveredWire.moduleIndex !== moduleIndex || 
+                    this.hoveredWire.wireIndex !== wireIndex) {
+                    // Remove previous hover
+                    if (this.hoveredWire !== null) {
+                        this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+                    }
+                    // Set new hover (only if wire is not cut)
+                    if (!wireGroup.userData.isCut) {
+                        this.hoveredWire = { moduleIndex, wireIndex };
+                        this.setWireHover(moduleIndex, wireIndex, true);
+                        this.container.style.cursor = 'pointer';
+                    } else {
+                        this.hoveredWire = null;
+                        this.container.style.cursor = 'default';
+                    }
+                }
+            }
+        } else {
+            // Remove hover only if we're not hovering over any wire
+            if (this.hoveredWire !== null) {
+                this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+                this.hoveredWire = null;
+                this.container.style.cursor = 'default';
+            }
+        }
+    }
+    
+    setWireHover(moduleIndex, wireIndex, isHovered) {
+        if (!this.wires[moduleIndex] || wireIndex < 0 || wireIndex >= this.wires[moduleIndex].length) {
+            return;
+        }
+        
+        const wireGroup = this.wires[moduleIndex][wireIndex];
+        if (!wireGroup || wireGroup.userData.isCut) {
+            return;
+        }
+        
+        const wire = this.findWireMesh(wireGroup);
+        if (!wire || !wire.material) {
+            return;
+        }
+        
+        // Don't modify if wire is already highlighted (selected)
+        const isSelected = this.selectedModule === moduleIndex && this.selectedWire === wireIndex;
+        
+        if (isHovered && !isSelected) {
+            // Use bright yellow emissive for hover effect (similar to module hover) - visible on all colors
+            wire.material.emissive.setHex(0xffff00);
+            wire.material.emissiveIntensity = 1.0;
+            // Slightly increase scale for better visibility (only radius, not length)
+            // Wire is rotated 90 degrees on Z axis, so:
+            // CylinderGeometry: height along Y axis, radius in X-Z plane
+            // After rotation.z = Math.PI/2: local Y becomes world X (length), local X becomes world -Y, local Z stays Z
+            // To scale only radius: scale local X and Z (not Y, which is the length dimension)
+            if (!wire.userData.originalScale) {
+                wire.userData.originalScale = wire.scale.clone();
+            }
+            wire.scale.set(1.15, 1.0, 1.15); // Scale X and Z (radius), keep Y (length) at 1.0
+        } else if (!isHovered && !isSelected) {
+            // Restore original emissive intensity and scale
+            const color = wire.material.color;
+            const wireColor = color.getHex();
+            // Restore original emissive based on wire color
+            let emissiveColor = new THREE.Color(wireColor).multiplyScalar(0.15);
+            if (wireColor === 0xffffff) {
+                emissiveColor = new THREE.Color(0xffffff).multiplyScalar(0.4);
+            }
+            wire.material.emissive.copy(emissiveColor);
+            wire.material.emissiveIntensity = 0.8;
+            // Restore original scale
+            if (wire.userData.originalScale) {
+                wire.scale.copy(wire.userData.originalScale);
+            }
+        }
+    }
+    
     handleModuleClick(event) {
         if (this.isZoomed) return false;
         
@@ -609,10 +769,22 @@ class Bomb3D {
             this.setModuleHover(this.hoveredModuleIndex, false);
             this.hoveredModuleIndex = null;
         }
+        
+        // Clear wire hover state
+        if (this.hoveredWire !== null) {
+            this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+            this.hoveredWire = null;
+        }
     }
     
     exitZoom() {
         if (!this.isZoomed) return;
+        
+        // Clear wire hover state
+        if (this.hoveredWire !== null) {
+            this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+            this.hoveredWire = null;
+        }
         
         this.zoomStartPosition.copy(this.camera.position);
         this.zoomTargetPosition.copy(this.originalCameraPosition);
@@ -674,15 +846,25 @@ class Bomb3D {
     handleClick(event) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
-        // Check all modules' wires
-        let allWireGroups = [];
-        this.wires.forEach(moduleWires => {
+        // When zoomed, only check wires from the zoomed module
+        // When not zoomed, check all modules' wires
+        let wireGroupsToCheck = [];
+        if (this.isZoomed && this.zoomedModuleIndex !== null) {
+            // Only check wires from the zoomed module
+            const moduleWires = this.wires[this.zoomedModuleIndex];
             if (moduleWires) {
-                allWireGroups = allWireGroups.concat(moduleWires);
+                wireGroupsToCheck = moduleWires;
             }
-        });
+        } else {
+            // Check all modules' wires
+            this.wires.forEach(moduleWires => {
+                if (moduleWires) {
+                    wireGroupsToCheck = wireGroupsToCheck.concat(moduleWires);
+                }
+            });
+        }
         
-        const intersects = this.raycaster.intersectObjects(allWireGroups, true);
+        const intersects = this.raycaster.intersectObjects(wireGroupsToCheck, true);
         
         if (intersects.length > 0) {
             let clickedObject = intersects[0].object;
@@ -701,7 +883,20 @@ class Bomb3D {
                 const wireIndex = wireGroup.userData.index;
                 const moduleIndex = wireGroup.userData.moduleIndex;
                 
+                // Check if module is solved - don't allow clicks on solved modules
+                if (this.wiresModulesState && 
+                    this.wiresModulesState[moduleIndex] && 
+                    this.wiresModulesState[moduleIndex].isSolved) {
+                    return; // Module is solved, ignore click
+                }
+                
                 if (!wireGroup.userData.isCut) {
+                    // Clear wire hover state when clicking
+                    if (this.hoveredWire !== null) {
+                        this.setWireHover(this.hoveredWire.moduleIndex, this.hoveredWire.wireIndex, false);
+                        this.hoveredWire = null;
+                    }
+                    
                     // Highlight wire
                     this.highlightWire(moduleIndex, wireIndex);
                     
