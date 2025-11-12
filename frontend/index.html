@@ -92,27 +92,58 @@
         </div>
         
         <div id="manual-container" style="display: none;">
-            <div id="manual-content">
+            <!-- Menu View -->
+            <div id="manual-menu-view">
                 <div id="manual-session-info" class="session-info">
                     <p>Session ID: <span id="manual-session-id">-</span></p>
                     <p>Connection: <span id="manual-connection-status">Disconnected</span></p>
                 </div>
                 
-                <h1 id="manual-title">Bombz Manual - Wires Module</h1>
+                <h1 id="manual-menu-title">Bombz Manual</h1>
                 
-                <div id="manual-wires-section">
-                    <h2>Wires Module Rules</h2>
-                    <div id="manual-rules"></div>
+                <div id="manual-module-cards">
+                    <div class="module-card" data-module="wireModule">
+                        <div class="module-card-icon wires-icon">⚡</div>
+                        <h2>Wires Module</h2>
+                        <p>Rules for cutting wires</p>
+                    </div>
+                    <div class="module-card" data-module="buttonModule">
+                        <div class="module-card-icon button-icon">🔘</div>
+                        <h2>Button Module</h2>
+                        <p>Rules for pressing buttons</p>
+                    </div>
+                    <div class="module-card" data-module="terminalModule">
+                        <div class="module-card-icon terminal-icon">💻</div>
+                        <h2>Terminal Module</h2>
+                        <p>Rules for terminal commands</p>
+                    </div>
                 </div>
-                
-                <div id="manual-wire-colors-section">
-                    <h2>Wire Colors</h2>
-                    <div id="manual-wire-colors"></div>
-                </div>
-                
-                <div id="manual-instructions-section">
-                    <h2>Instructions</h2>
-                    <p id="manual-instructions"></p>
+            </div>
+            
+            <!-- Detail View -->
+            <div id="manual-detail-view" style="display: none;">
+                <button id="manual-back-button" class="manual-back-button">← Back</button>
+                <div id="manual-content">
+                    <h1 id="manual-title">Bombz Manual</h1>
+                    
+                    <div id="manual-wires-section" style="display: none;">
+                        <h2>Wires Module Rules</h2>
+                        <div id="manual-rules"></div>
+                        
+                        <div id="manual-wire-colors-section">
+                            <h2>Wire Colors</h2>
+                            <div id="manual-wire-colors"></div>
+                        </div>
+                        
+                        <div id="manual-instructions-section">
+                            <h2>Instructions</h2>
+                            <p id="manual-instructions"></p>
+                        </div>
+                    </div>
+                    
+                    <div id="manual-buttons-section" style="display: none;"></div>
+                    
+                    <div id="manual-terminal-section" style="display: none;"></div>
                 </div>
             </div>
         </div>

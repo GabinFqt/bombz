@@ -218,9 +218,101 @@ button:active {
     padding: 20px;
 }
 
+#manual-menu-view {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+#manual-menu-title {
+    color: #4ecdc4;
+    text-align: center;
+    font-size: 36px;
+    margin-bottom: 40px;
+    margin-top: 20px;
+}
+
+#manual-module-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+    padding: 20px;
+}
+
+.module-card {
+    background: rgba(26, 26, 26, 0.95);
+    border: 2px solid #4ecdc4;
+    border-radius: 12px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    min-height: 250px;
+    justify-content: center;
+}
+
+.module-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(78, 205, 196, 0.3);
+    border-color: #5eddd4;
+}
+
+.module-card-icon {
+    font-size: 64px;
+    margin-bottom: 10px;
+}
+
+.module-card h2 {
+    color: #4ecdc4;
+    margin: 0;
+    font-size: 24px;
+    text-align: center;
+}
+
+.module-card p {
+    color: #999;
+    margin: 0;
+    text-align: center;
+    font-size: 14px;
+}
+
+#manual-detail-view {
+    position: relative;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.manual-back-button {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: #4ecdc4;
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    z-index: 10;
+}
+
+.manual-back-button:hover {
+    background: #5eddd4;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(78, 205, 196, 0.3);
+}
+
 #manual-content {
     max-width: 800px;
     margin: 0 auto;
+    padding-top: 60px;
 }
 
 #manual-content h1 {

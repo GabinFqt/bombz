@@ -2,6 +2,50 @@
 class ManualDisplay {
     constructor() {
         this.currentManualContent = null;
+        this.currentView = 'menu'; // 'menu' or 'detail'
+        this.currentModule = null; // Track selected module key
+        this.setupEventListeners();
+    }
+
+    // Setup event listeners for card clicks and back button
+    setupEventListeners() {
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.attachListeners());
+        } else {
+            // Use setTimeout to ensure DOM is fully ready
+            setTimeout(() => this.attachListeners(), 0);
+        }
+    }
+
+    attachListeners() {
+        // Module card clicks - use event delegation for better reliability
+        const cardsContainer = document.getElementById('manual-module-cards');
+        if (cardsContainer) {
+            // Remove existing listener if any, then add new one
+            cardsContainer.removeEventListener('click', this.handleCardClick);
+            this.handleCardClick = (e) => {
+                const card = e.target.closest('.module-card');
+                if (card) {
+                    const moduleKey = card.getAttribute('data-module');
+                    if (moduleKey) {
+                        this.showModuleDetail(moduleKey);
+                    }
+                }
+            };
+            cardsContainer.addEventListener('click', this.handleCardClick);
+        }
+
+        // Back button
+        const backButton = document.getElementById('manual-back-button');
+        if (backButton) {
+            // Remove existing listener if any, then add new one
+            backButton.removeEventListener('click', this.handleBackClick);
+            this.handleBackClick = () => {
+                this.handleBackButton();
+            };
+            backButton.addEventListener('click', this.handleBackClick);
+        }
     }
 
     // Render manual content received from backend
@@ -14,33 +58,76 @@ class ManualDisplay {
             sessionIdElement.textContent = currentSessionId;
         }
 
-        // Render wire module manual
-        if (manualContent.wireModule) {
-            this.renderWireModuleManual(manualContent.wireModule);
+        // If we're on menu view, just show menu (content is stored for when user clicks)
+        // If we're on detail view, render the current module
+        if (this.currentView === 'menu') {
+            this.showMenuView();
+        } else if (this.currentModule) {
+            this.showModuleDetail(this.currentModule);
         }
-        
-        // Render single button module manual from modules map
-        if (manualContent.modules && manualContent.modules['buttonModule']) {
-            this.renderButtonModuleManual(manualContent.modules['buttonModule'], 'Button Module');
-        }
-        
-        // Render terminal module manuals from modules map
-        // First render the general terminal module manual
-        if (manualContent.modules && manualContent.modules['terminalModule']) {
-            this.renderTerminalModuleManual(manualContent.modules['terminalModule'], 'Terminal Module');
-        }
-        
-        // Then render specific manuals for each terminal module
-        if (manualContent.modules) {
-            Object.keys(manualContent.modules).forEach(key => {
-                if (key.startsWith('terminalModule') && key !== 'terminalModule') {
-                    // This is a specific terminal module (e.g., terminalModule0, terminalModule1)
-                    const moduleIndex = key.replace('terminalModule', '');
-                    this.renderTerminalModuleManual(manualContent.modules[key], `Terminal Module ${parseInt(moduleIndex) + 1}`);
-                }
-            });
-        }
+    }
 
+    // Show menu view with module cards
+    showMenuView() {
+        this.currentView = 'menu';
+        this.currentModule = null;
+        
+        const menuView = document.getElementById('manual-menu-view');
+        const detailView = document.getElementById('manual-detail-view');
+        
+        if (menuView) menuView.style.display = 'block';
+        if (detailView) detailView.style.display = 'none';
+        
+        // Re-attach listeners in case DOM was recreated
+        this.attachListeners();
+    }
+
+    // Show detail view for a specific module
+    showModuleDetail(moduleKey) {
+        this.currentView = 'detail';
+        this.currentModule = moduleKey;
+        
+        const menuView = document.getElementById('manual-menu-view');
+        const detailView = document.getElementById('manual-detail-view');
+        
+        if (menuView) menuView.style.display = 'none';
+        if (detailView) detailView.style.display = 'block';
+        
+        // Hide all module sections first
+        const wiresSection = document.getElementById('manual-wires-section');
+        const buttonsSection = document.getElementById('manual-buttons-section');
+        const terminalSection = document.getElementById('manual-terminal-section');
+        
+        if (wiresSection) wiresSection.style.display = 'none';
+        if (buttonsSection) buttonsSection.style.display = 'none';
+        if (terminalSection) terminalSection.style.display = 'none';
+        
+        // Render the selected module
+        if (!this.currentManualContent) {
+            return;
+        }
+        
+        if (moduleKey === 'wireModule' && this.currentManualContent.wireModule) {
+            this.renderWireModuleManual(this.currentManualContent.wireModule);
+            if (wiresSection) wiresSection.style.display = 'block';
+            const titleElement = document.getElementById('manual-title');
+            if (titleElement) titleElement.textContent = 'Bombz Manual - Wires Module';
+        } else if (moduleKey === 'buttonModule' && this.currentManualContent.modules && this.currentManualContent.modules['buttonModule']) {
+            this.renderButtonModuleManual(this.currentManualContent.modules['buttonModule'], 'Button Module');
+            if (buttonsSection) buttonsSection.style.display = 'block';
+            const titleElement = document.getElementById('manual-title');
+            if (titleElement) titleElement.textContent = 'Bombz Manual - Button Module';
+        } else if (moduleKey === 'terminalModule' && this.currentManualContent.modules && this.currentManualContent.modules['terminalModule']) {
+            this.renderTerminalModuleManual(this.currentManualContent.modules['terminalModule'], 'Terminal Module');
+            if (terminalSection) terminalSection.style.display = 'block';
+            const titleElement = document.getElementById('manual-title');
+            if (titleElement) titleElement.textContent = 'Bombz Manual - Terminal Module';
+        }
+    }
+
+    // Handle back button click
+    handleBackButton() {
+        this.showMenuView();
     }
 
     // Render wire module manual rules and colors
@@ -112,21 +199,9 @@ class ManualDisplay {
 
     // Render button module manual rules
     renderButtonModuleManual(buttonModule, moduleTitle) {
-        // Create or find container for button modules
-        let buttonSection = document.getElementById('manual-buttons-section');
+        const buttonSection = document.getElementById('manual-buttons-section');
         if (!buttonSection) {
-            buttonSection = document.createElement('div');
-            buttonSection.id = 'manual-buttons-section';
-            const manualContent = document.getElementById('manual-content');
-            if (manualContent) {
-                // Insert after wire colors section
-                const wireColorsSection = document.getElementById('manual-wire-colors-section');
-                if (wireColorsSection && wireColorsSection.nextSibling) {
-                    manualContent.insertBefore(buttonSection, wireColorsSection.nextSibling);
-                } else {
-                    manualContent.appendChild(buttonSection);
-                }
-            }
+            return;
         }
         
         // Clear existing content
@@ -193,6 +268,8 @@ class ManualDisplay {
         const container = document.getElementById('manual-container');
         if (container) {
             container.style.display = 'block';
+            // Always start with menu view
+            this.showMenuView();
         }
     }
 
@@ -206,21 +283,9 @@ class ManualDisplay {
     
     // Render terminal module manual rules
     renderTerminalModuleManual(terminalModule, moduleTitle) {
-        // Create or find container for terminal modules
-        let terminalSection = document.getElementById('manual-terminal-section');
+        const terminalSection = document.getElementById('manual-terminal-section');
         if (!terminalSection) {
-            terminalSection = document.createElement('div');
-            terminalSection.id = 'manual-terminal-section';
-            const manualContent = document.getElementById('manual-content');
-            if (manualContent) {
-                // Insert after button section
-                const buttonSection = document.getElementById('manual-buttons-section');
-                if (buttonSection && buttonSection.nextSibling) {
-                    manualContent.insertBefore(terminalSection, buttonSection.nextSibling);
-                } else {
-                    manualContent.appendChild(terminalSection);
-                }
-            }
+            return;
         }
         
         // Clear existing content
