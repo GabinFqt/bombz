@@ -130,10 +130,23 @@ class ManualDisplay {
                     return; // Skip empty rules
                 }
                 
-                const ruleDiv = document.createElement('div');
-                ruleDiv.className = 'rule';
-                ruleDiv.innerHTML = `<span class="rule-number">Rule ${rule.number}:</span> ${rule.description}`;
-                rulesContainer.appendChild(ruleDiv);
+                // Check if it's a section title (Number 0 indicates it's a title, not a rule)
+                if (rule.number === 0) {
+                    const titleElement = document.createElement('h3');
+                    titleElement.className = 'rule-section-title';
+                    titleElement.style.color = '#4ecdc4';
+                    titleElement.style.marginTop = '30px';
+                    titleElement.style.marginBottom = '15px';
+                    titleElement.style.fontSize = '1.3em';
+                    titleElement.style.fontWeight = 'bold';
+                    titleElement.textContent = rule.description;
+                    rulesContainer.appendChild(titleElement);
+                } else {
+                    const ruleDiv = document.createElement('div');
+                    ruleDiv.className = 'rule';
+                    ruleDiv.innerHTML = `<span class="rule-number">Rule ${rule.number}:</span> ${rule.description}`;
+                    rulesContainer.appendChild(ruleDiv);
+                }
             });
         }
         

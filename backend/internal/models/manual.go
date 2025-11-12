@@ -584,11 +584,18 @@ func GenerateButtonModuleRulesWithSeed(seed int64) (*ButtonRuleSet, *ModuleManua
 	// Generate 3-5 random rules using the seeded RNG
 	numRules := rng.Intn(3) + 3 // 3-5 rules
 	rules := make([]ButtonRule, 0, numRules)
-	manualRules := make([]ManualRule, 0, numRules+1)
+	preHoldRules := make([]ManualRule, 0, numRules+2) // Pre-hold rules section
 
 	// Track used condition indices to avoid duplicates
 	usedConditions := make(map[int]bool)
 
+	// Add section title for pre-hold logic (Number 0 indicates it's a title, not a rule)
+	preHoldRules = append(preHoldRules, ManualRule{
+		Number:      0,
+		Description: "Pre-Hold Logic: Press vs Hold",
+	})
+
+	ruleNum := 1
 	for i := 0; i < numRules; i++ {
 		// Pick a random condition (avoid duplicates) using seeded RNG
 		var condIndex int
@@ -650,19 +657,21 @@ func GenerateButtonModuleRulesWithSeed(seed int64) (*ButtonRuleSet, *ModuleManua
 			Evaluator:   finalEvaluator,
 		})
 
-		manualRules = append(manualRules, ManualRule{
-			Number:      i + 1,
+		preHoldRules = append(preHoldRules, ManualRule{
+			Number:      ruleNum,
 			Description: description,
 		})
+		ruleNum++
 	}
 
 	// Add default rule: hold (gauge color will be randomly selected when pressed)
 	defaultDescription := "Otherwise, hold the button. When pressed, a random gauge color will appear."
 
-	manualRules = append(manualRules, ManualRule{
-		Number:      len(manualRules) + 1,
+	preHoldRules = append(preHoldRules, ManualRule{
+		Number:      ruleNum,
 		Description: defaultDescription,
 	})
+	ruleNum++
 
 	// Create default rule evaluator (matches any condition not covered by specific rules)
 	defaultEvaluator := func(text ButtonText, color ButtonColor) *ButtonRuleResult {
@@ -679,26 +688,24 @@ func GenerateButtonModuleRulesWithSeed(seed int64) (*ButtonRuleSet, *ModuleManua
 		Evaluator:   defaultEvaluator,
 	})
 
-	// Add gauge color -> timer digit mapping rules to manual
-	gaugeDigitRules := []ManualRule{}
-	ruleNum := len(manualRules) + 1
-	gaugeDigitRules = append(gaugeDigitRules, ManualRule{
-		Number:      ruleNum,
-		Description: "=== Gauge Color to Timer Digit Mapping ===",
+	// Add section title for post-hold logic (Number 0 indicates it's a title, not a rule)
+	postHoldRules := []ManualRule{}
+	postHoldRules = append(postHoldRules, ManualRule{
+		Number:      0,
+		Description: "Post-Hold Logic: Gauge Color to Timer Digit",
 	})
-	ruleNum++
 
 	for _, gaugeColor := range gaugeColors {
 		digit := gaugeColorToDigitRules[gaugeColor]
-		gaugeDigitRules = append(gaugeDigitRules, ManualRule{
+		postHoldRules = append(postHoldRules, ManualRule{
 			Number:      ruleNum,
 			Description: fmt.Sprintf("If gauge shows %s, release when timer's last digit is %d.", gaugeColor, digit),
 		})
 		ruleNum++
 	}
 
-	// Combine button rules and gauge digit rules
-	allManualRules := append(manualRules, gaugeDigitRules...)
+	// Combine pre-hold and post-hold rules
+	allManualRules := append(preHoldRules, postHoldRules...)
 
 	// Create ModuleManual
 	moduleManual := &ModuleManual{
