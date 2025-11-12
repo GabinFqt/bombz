@@ -41,6 +41,10 @@ class Bomb3D {
         // Wire hover state
         this.hoveredWire = null; // { moduleIndex: number, wireIndex: number } or null
         
+        // Touch gesture state for pinch-to-zoom
+        this.touchStartDistance = null;
+        this.touchStartTime = null;
+        
         this.init();
         this.setupEventListeners();
     }
@@ -475,6 +479,40 @@ class Bomb3D {
         // Click handler
         this.container.addEventListener('click', (event) => {
             if (this.isZoomed) {
+                // When zoomed, check if click hits any 3D objects
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                
+                // Collect all objects that can be clicked (wires and module panels)
+                const clickableObjects = [];
+                
+                // Add wires from the zoomed module
+                const moduleWires = this.wires[this.zoomedModuleIndex];
+                if (moduleWires) {
+                    moduleWires.forEach(wireGroup => {
+                        wireGroup.traverse((child) => {
+                            if (child.isMesh && child.material) {
+                                clickableObjects.push(child);
+                            }
+                        });
+                    });
+                }
+                
+                // Add module panels
+                if (this.modulePanels) {
+                    this.modulePanels.forEach(mp => {
+                        clickableObjects.push(mp.panel);
+                    });
+                }
+                
+                // Check if click hits any object
+                const intersects = this.raycaster.intersectObjects(clickableObjects, true);
+                
+                if (intersects.length === 0) {
+                    // Clicked outside the bomb - exit zoom
+                    this.exitZoom();
+                    return;
+                }
+                
                 // Handle wire clicks in zoom mode
                 this.handleClick(event);
             } else {
@@ -493,6 +531,56 @@ class Bomb3D {
                 this.exitZoom();
             }
         });
+        
+        // Mouse wheel dezoom handler
+        this.container.addEventListener('wheel', (event) => {
+            if (this.isZoomed) {
+                // Prevent default scrolling behavior
+                event.preventDefault();
+                // Exit zoom on any wheel movement when zoomed
+                this.exitZoom();
+            }
+        }, { passive: false });
+        
+        // Touch gesture handlers for phone dezoom (pinch-out)
+        this.container.addEventListener('touchstart', (event) => {
+            if (this.isZoomed && event.touches.length === 2) {
+                // Two fingers - start tracking pinch gesture
+                const touch1 = event.touches[0];
+                const touch2 = event.touches[1];
+                this.touchStartDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                this.touchStartTime = Date.now();
+            }
+        }, { passive: true });
+        
+        this.container.addEventListener('touchmove', (event) => {
+            if (this.isZoomed && event.touches.length === 2 && this.touchStartDistance !== null) {
+                const touch1 = event.touches[0];
+                const touch2 = event.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                // If fingers are moving apart (pinch-out), dezoom
+                if (currentDistance > this.touchStartDistance * 1.2) {
+                    this.exitZoom();
+                    this.touchStartDistance = null;
+                    this.touchStartTime = null;
+                }
+            }
+        }, { passive: true });
+        
+        this.container.addEventListener('touchend', (event) => {
+            // Reset touch tracking when touch ends
+            if (event.touches.length < 2) {
+                this.touchStartDistance = null;
+                this.touchStartTime = null;
+            }
+        }, { passive: true });
         
         // Set initial cursor
         this.container.style.cursor = 'grab';
