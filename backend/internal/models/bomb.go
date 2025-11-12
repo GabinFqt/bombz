@@ -35,8 +35,9 @@ type Bomb struct {
 // NewBomb creates a new bomb with initial configuration
 func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 	// Validate module count
-	if moduleCount < 1 {
-		moduleCount = 1
+	// Need at least 3 modules to have one of each type (wires, button, terminal)
+	if moduleCount < 3 {
+		moduleCount = 3
 	}
 	if moduleCount > 6 {
 		moduleCount = 6
@@ -46,17 +47,29 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 	// This seed will be used for both manual and module rules to ensure they are aligned
 	seed := rand.Int63()
 
-	// Randomly split moduleCount between wire, button, and terminal modules
+	// Ensure at least one module of each type, then randomly distribute the remaining
 	// Create a seeded RNG for module type distribution
 	moduleTypeRNG := rand.New(rand.NewSource(seed))
 
-	// First decide how many terminal modules (0 to moduleCount/2, but at least 0)
-	numTerminalModules := moduleTypeRNG.Intn((moduleCount / 2) + 1)
-	remainingModules := moduleCount - numTerminalModules
+	// Start with at least one of each type
+	numWireModules := 1
+	numButtonModules := 1
+	numTerminalModules := 1
+	remainingModules := moduleCount - 3 // We've already allocated 3 modules
 
-	// Split remaining between wire and button modules
-	numWireModules := moduleTypeRNG.Intn(remainingModules + 1) // 0 to remainingModules
-	numButtonModules := remainingModules - numWireModules
+	// Randomly distribute the remaining modules between the three types
+	for remainingModules > 0 {
+		moduleType := moduleTypeRNG.Intn(3) // 0 = wire, 1 = button, 2 = terminal
+		switch moduleType {
+		case 0:
+			numWireModules++
+		case 1:
+			numButtonModules++
+		case 2:
+			numTerminalModules++
+		}
+		remainingModules--
+	}
 
 	// Store module rules - each module will have its own manual
 	moduleRules := make(map[string]*ModuleManual)
