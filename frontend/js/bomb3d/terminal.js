@@ -521,6 +521,33 @@ class TerminalManager {
             
             // Add current prompt and input
             if (!isSolved) {
+                // Before showing the prompt, check if we need to show the current terminal text
+                // This happens when currentStep > number of correct responses (i.e., we're waiting for the next command)
+                const numCorrectResponses = responses.filter(r => r.correct).length;
+                if (terminalTexts && Array.isArray(terminalTexts) && currentStep < terminalTexts.length) {
+                    // Check if we've already shown the terminal text for currentStep
+                    // We show terminalTexts[i+1] after correct response i, so if currentStep > numCorrectResponses,
+                    // we haven't shown terminalTexts[currentStep] yet
+                    if (currentStep > numCorrectResponses) {
+                        lines.push({ text: '', color: '#00ff00' }); // Empty line separator
+                        const currentTerminalText = terminalTexts[currentStep];
+                        const textLines = currentTerminalText.split('\n');
+                        textLines.forEach(line => {
+                            if (line.trim()) {
+                                // Wrap long lines
+                                if (context) {
+                                    const wrappedLines = this.wrapText(context, line.trim(), maxTextWidth);
+                                    wrappedLines.forEach(wrappedLine => {
+                                        lines.push({ text: wrappedLine, color: '#00ff00' });
+                                    });
+                                } else {
+                                    lines.push({ text: line.trim(), color: '#00ff00' });
+                                }
+                            }
+                        });
+                    }
+                }
+                
                 lines.push({ text: '', color: '#00ff00' }); // Empty line separator
                 const promptText = `Command ${currentStep + 1}/3:`;
                 // Wrap prompt if needed
