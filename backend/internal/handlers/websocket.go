@@ -530,8 +530,8 @@ func (h *WebSocketHandler) broadcastLoop(session *models.GameSession) {
 		session.Update()
 		h.broadcastGameState(session)
 		
-		// Stop broadcasting if game is over
-		if session.Bomb.State != models.BombStateActive {
+		// Stop broadcasting if game is over or bomb is nil (returned to lobby)
+		if session.Bomb == nil || session.Bomb.State != models.BombStateActive {
 			break
 		}
 	}
