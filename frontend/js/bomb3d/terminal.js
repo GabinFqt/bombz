@@ -127,7 +127,8 @@ class TerminalManager {
             currentStep,
             isSolved,
             null, // Not active during creation
-            null  // No input during creation
+            null, // No input during creation
+            context // Pass context for text wrapping
         );
         
         const lineHeight = 60;
@@ -342,10 +343,73 @@ class TerminalManager {
             this.currentInputText = '';
         }
         
+        // Helper function to wrap text based on canvas width
+        wrapText(context, text, maxWidth) {
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0] || '';
+            
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i];
+                const testLine = currentLine + ' ' + word;
+                const metrics = context.measureText(testLine);
+                
+                if (metrics.width > maxWidth && currentLine.length > 0) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            
+            // Handle case where a single word is longer than maxWidth
+            if (currentLine.length > 0) {
+                while (currentLine.length > 0) {
+                    let testLine = currentLine;
+                    let metrics = context.measureText(testLine);
+                    
+                    if (metrics.width <= maxWidth) {
+                        lines.push(testLine);
+                        break;
+                    }
+                    
+                    // Binary search for the right length
+                    let low = 0;
+                    let high = currentLine.length;
+                    let bestFit = '';
+                    
+                    while (low <= high) {
+                        const mid = Math.floor((low + high) / 2);
+                        const test = currentLine.substring(0, mid);
+                        const testMetrics = context.measureText(test);
+                        
+                        if (testMetrics.width <= maxWidth) {
+                            bestFit = test;
+                            low = mid + 1;
+                        } else {
+                            high = mid - 1;
+                        }
+                    }
+                    
+                    if (bestFit.length > 0) {
+                        lines.push(bestFit);
+                        currentLine = currentLine.substring(bestFit.length);
+                    } else {
+                        // Fallback: take at least one character
+                        lines.push(currentLine.substring(0, 1));
+                        currentLine = currentLine.substring(1);
+                    }
+                }
+            }
+            
+            return lines.length > 0 ? lines : [text];
+        }
+        
         // Helper function to collect all lines to display
-        collectTerminalLines(terminalTexts, terminalText, responses, enteredCommands, currentStep, isSolved, activeTerminalIndex, currentInputText) {
+        collectTerminalLines(terminalTexts, terminalText, responses, enteredCommands, currentStep, isSolved, activeTerminalIndex, currentInputText, context) {
             const lines = [];
             const lineHeight = 60;
+            const maxTextWidth = 900; // Available width for text (canvas width 1024 - margins)
             
             // Always use initial terminal text (terminalTexts[0]) at the top
             let initialTerminalText = "Terminal ready.";
@@ -360,7 +424,15 @@ class TerminalManager {
                 const textLines = initialTerminalText.split('\n');
                 textLines.forEach(line => {
                     if (line.trim()) {
-                        lines.push({ text: line, color: '#00ff00' });
+                        // Wrap long lines
+                        if (context) {
+                            const wrappedLines = this.wrapText(context, line.trim(), maxTextWidth);
+                            wrappedLines.forEach(wrappedLine => {
+                                lines.push({ text: wrappedLine, color: '#00ff00' });
+                            });
+                        } else {
+                            lines.push({ text: line.trim(), color: '#00ff00' });
+                        }
                     }
                 });
             } else {
@@ -378,7 +450,15 @@ class TerminalManager {
                         const responseLines = response.text.split('\n');
                         responseLines.forEach(line => {
                             if (line.trim()) {
-                                lines.push({ text: line, color: response.correct ? '#00ff00' : '#ff6b6b' });
+                                // Wrap long lines
+                                if (context) {
+                                    const wrappedLines = this.wrapText(context, line.trim(), maxTextWidth);
+                                    wrappedLines.forEach(wrappedLine => {
+                                        lines.push({ text: wrappedLine, color: response.correct ? '#00ff00' : '#ff6b6b' });
+                                    });
+                                } else {
+                                    lines.push({ text: line.trim(), color: response.correct ? '#00ff00' : '#ff6b6b' });
+                                }
                             }
                         });
                         
@@ -390,7 +470,15 @@ class TerminalManager {
                                 const textLines = nextTerminalText.split('\n');
                                 textLines.forEach(line => {
                                     if (line.trim()) {
-                                        lines.push({ text: line, color: '#00ff00' });
+                                        // Wrap long lines
+                                        if (context) {
+                                            const wrappedLines = this.wrapText(context, line.trim(), maxTextWidth);
+                                            wrappedLines.forEach(wrappedLine => {
+                                                lines.push({ text: wrappedLine, color: '#00ff00' });
+                                            });
+                                        } else {
+                                            lines.push({ text: line.trim(), color: '#00ff00' });
+                                        }
                                     }
                                 });
                             }
@@ -402,14 +490,31 @@ class TerminalManager {
                                 const textLines = currentTerminalText.split('\n');
                                 textLines.forEach(line => {
                                     if (line.trim()) {
-                                        lines.push({ text: line, color: '#00ff00' });
+                                        // Wrap long lines
+                                        if (context) {
+                                            const wrappedLines = this.wrapText(context, line.trim(), maxTextWidth);
+                                            wrappedLines.forEach(wrappedLine => {
+                                                lines.push({ text: wrappedLine, color: '#00ff00' });
+                                            });
+                                        } else {
+                                            lines.push({ text: line.trim(), color: '#00ff00' });
+                                        }
                                     }
                                 });
                             }
                         }
                     } else if (i < enteredCommands.length) {
                         const cmd = enteredCommands[i];
-                        lines.push({ text: `> ${cmd}`, color: i < currentStep ? '#00ff00' : '#888888' });
+                        const cmdText = `> ${cmd}`;
+                        // Wrap long command lines
+                        if (context) {
+                            const wrappedLines = this.wrapText(context, cmdText, maxTextWidth);
+                            wrappedLines.forEach(wrappedLine => {
+                                lines.push({ text: wrappedLine, color: i < currentStep ? '#00ff00' : '#888888' });
+                            });
+                        } else {
+                            lines.push({ text: cmdText, color: i < currentStep ? '#00ff00' : '#888888' });
+                        }
                     }
                 }
             }
@@ -417,17 +522,44 @@ class TerminalManager {
             // Add current prompt and input
             if (!isSolved) {
                 lines.push({ text: '', color: '#00ff00' }); // Empty line separator
-                lines.push({ text: `Command ${currentStep + 1}/3:`, color: '#00ff00' });
+                const promptText = `Command ${currentStep + 1}/3:`;
+                // Wrap prompt if needed
+                if (context) {
+                    const wrappedPrompt = this.wrapText(context, promptText, maxTextWidth);
+                    wrappedPrompt.forEach(wrappedLine => {
+                        lines.push({ text: wrappedLine, color: '#00ff00' });
+                    });
+                } else {
+                    lines.push({ text: promptText, color: '#00ff00' });
+                }
                 
                 // Add current input text if active
                 if (activeTerminalIndex !== null && currentInputText !== null && currentInputText !== undefined) {
-                    lines.push({ text: `> ${currentInputText}`, color: '#00ff00', hasCursor: true });
+                    const inputText = `> ${currentInputText}`;
+                    // Wrap input text if needed
+                    if (context) {
+                        const wrappedInput = this.wrapText(context, inputText, maxTextWidth);
+                        wrappedInput.forEach((wrappedLine, idx) => {
+                            lines.push({ text: wrappedLine, color: '#00ff00', hasCursor: idx === wrappedInput.length - 1 });
+                        });
+                    } else {
+                        lines.push({ text: inputText, color: '#00ff00', hasCursor: true });
+                    }
                 } else {
                     lines.push({ text: '', color: '#00ff00', hasCursor: true }); // Cursor only
                 }
             } else {
                 lines.push({ text: '', color: '#00ff00' }); // Empty line separator
-                lines.push({ text: 'All commands executed successfully.', color: '#00ff00' });
+                const successText = 'All commands executed successfully.';
+                // Wrap success message if needed
+                if (context) {
+                    const wrappedSuccess = this.wrapText(context, successText, maxTextWidth);
+                    wrappedSuccess.forEach(wrappedLine => {
+                        lines.push({ text: wrappedLine, color: '#00ff00' });
+                    });
+                } else {
+                    lines.push({ text: successText, color: '#00ff00' });
+                }
             }
             
             return lines;
@@ -468,18 +600,6 @@ class TerminalManager {
             const isSolved = terminalGroup.userData.isSolved;
             const responses = this.commandResponses[moduleIndex] || [];
             
-            // Collect all lines to display
-            const allLines = this.collectTerminalLines(
-                terminalTexts,
-                terminalText,
-                responses,
-                enteredCommands,
-                currentStep,
-                isSolved,
-                this.activeTerminalIndex === moduleIndex ? moduleIndex : null,
-                this.activeTerminalIndex === moduleIndex ? this.currentInputText : null
-            );
-            
             // Clear canvas
             context.fillStyle = '#0a0a0a';
             context.fillRect(0, 0, canvas.width, canvas.height);
@@ -488,6 +608,19 @@ class TerminalManager {
             context.font = 'bold 48px "Courier New", monospace';
             context.textAlign = 'left';
             context.textBaseline = 'top';
+            
+            // Collect all lines to display (with context for text wrapping)
+            const allLines = this.collectTerminalLines(
+                terminalTexts,
+                terminalText,
+                responses,
+                enteredCommands,
+                currentStep,
+                isSolved,
+                this.activeTerminalIndex === moduleIndex ? moduleIndex : null,
+                this.activeTerminalIndex === moduleIndex ? this.currentInputText : null,
+                context // Pass context for text wrapping
+            );
             
             const lineHeight = 60;
             const topMargin = 60;

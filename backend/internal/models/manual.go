@@ -828,22 +828,19 @@ func GenerateComprehensiveTerminalModuleManual(seed int64) *ModuleManual {
 	// Create a seeded RNG for deterministic generation
 	rng := rand.New(rand.NewSource(seed))
 
-	// Command words pool
+	// Command words pool - realistic Unix/Linux commands with arguments
 	commandWords := []string{
-		"RED", "BLUE", "GREEN", "WHITE", "YELLOW",
-		"ABORT", "DETONATE", "HOLD", "PRESS", "OTHER",
-		"FIRST", "SECOND", "THIRD", "LAST",
-		"ENTER", "EXECUTE", "RUN", "START", "STOP",
-		"YES", "NO", "ACCEPT", "DENY", "CONFIRM",
-		"UP", "DOWN", "LEFT", "RIGHT",
-		"ALPHA", "BRAVO", "CHARLIE", "DELTA",
+		"ls -la", "cd /tmp", "cat /etc/passwd", "grep -r bomb", "find / -name", "ps aux",
+		"kill -9", "top -n 1", "sudo su", "chmod 777", "chown root", "ssh root@",
+		"ping -c 3", "curl -X POST", "wget -q", "nc -lvp", "telnet 127.0.0.1", "echo OK",
+		"rm -rf", "mv -f", "cp -r", "touch .bomb", "mkdir -p", "tail -f",
+		"head -n 10", "less +F", "vim +q", "nano -w", "exit 0", "reboot -f",
+		"halt -p", "whoami", "date +%s", "time -p", "uptime -s", "dmesg | grep",
+		"systemctl stop", "service restart", "uname -a", "ifconfig eth0", "iptables -L", "netstat -an",
 	}
 
-	// Combine all terminal text templates
-	allTerminalTexts := append(append(
-		initialTerminalTexts,
-		afterFirstCommandTexts...),
-		afterSecondCommandTexts...)
+	// Use the terminal prompts list
+	allTerminalTexts := terminalPrompts
 
 	// Generate 20 unique combinations
 	manualRules := make([]ManualRule, 0, 20)
