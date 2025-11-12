@@ -107,7 +107,6 @@ function setupMenuHandlers() {
     
     // Game end controls
     document.getElementById('return-to-lobby-btn').addEventListener('click', () => {
-        console.log('Return to lobby button clicked:', { isHost, currentHostId, currentSessionId });
         returnToLobby();
     });
 }
@@ -365,10 +364,10 @@ async function updateLobbySettings() {
         } else {
             await apiClient.updateLobbySettings(currentSessionId, currentHostId, settings);
         }
-    } catch (error) {
-        console.error('Error updating lobby settings:', error);
-        alert('Failed to update lobby settings. Please try again.');
-    }
+        } catch (error) {
+            console.error('Error updating lobby settings:', error);
+            alert('Failed to update lobby settings. Please try again.');
+        }
 }
 
 function selectDefuser(playerId) {
@@ -384,11 +383,11 @@ function selectDefuser(playerId) {
     // Send via WebSocket if connected, otherwise via API
     if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
         websocketClient.sendLobbySettings(settings);
-    } else {
-        apiClient.updateLobbySettings(currentSessionId, currentHostId, settings).catch(error => {
-            console.error('Error selecting defuser:', error);
-        });
-    }
+        } else {
+            apiClient.updateLobbySettings(currentSessionId, currentHostId, settings).catch(error => {
+                console.error('Error selecting defuser:', error);
+            });
+        }
 }
 
 function selectRandomDefuser() {
@@ -404,11 +403,11 @@ function selectRandomDefuser() {
     // Send via WebSocket if connected, otherwise via API
     if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
         websocketClient.sendLobbySettings(settings);
-    } else {
-        apiClient.updateLobbySettings(currentSessionId, currentHostId, settings).catch(error => {
-            console.error('Error selecting random defuser:', error);
-        });
-    }
+        } else {
+            apiClient.updateLobbySettings(currentSessionId, currentHostId, settings).catch(error => {
+                console.error('Error selecting random defuser:', error);
+            });
+        }
 }
 
 function updatePlayerName(name) {
@@ -422,7 +421,6 @@ function updatePlayerName(name) {
 
 function startGameFromLobby() {
     if (!isHost || !currentHostId || !currentSessionId) {
-        console.log('Cannot start game:', { isHost, currentHostId, currentSessionId });
         return;
     }
     
@@ -432,17 +430,12 @@ function startGameFromLobby() {
     startBtn.disabled = true;
     errorMsg.style.display = 'none';
     
-    console.log('Starting game...', { currentSessionId, currentHostId });
-    
     // Send via WebSocket if connected, otherwise via API
     if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
-        console.log('Sending start game via WebSocket');
         websocketClient.sendStartGame();
     } else {
-        console.log('Sending start game via API');
         apiClient.startGame(currentSessionId, currentHostId).then(() => {
             // Game will start via WebSocket message
-            console.log('Start game API call successful');
         }).catch(error => {
             console.error('Failed to start game:', error);
             errorMsg.textContent = error.message || 'Failed to start game';
@@ -470,7 +463,6 @@ function transitionToGame() {
     
     // Check if Three.js is loaded
     if (typeof THREE === 'undefined') {
-        console.error('Three.js is not loaded. Please check the CDN connection.');
         alert('Failed to load Three.js library. Please check your internet connection and try again.');
         return;
     }
@@ -597,7 +589,6 @@ function showGameEnd(gameState) {
 }
 
 function handleReturnToLobby(lobbyDataFromUpdate = null) {
-    console.log('handleReturnToLobby called:', { lobbyDataFromUpdate, isHost, currentHostId, currentSessionId });
     
     // Re-enable the return to lobby button in case it was disabled
     const returnBtn = document.getElementById('return-to-lobby-btn');
@@ -746,7 +737,6 @@ function handleReturnToLobby(lobbyDataFromUpdate = null) {
                     }
                 }
                 
-                console.log('Lobby state fetched:', { isHost, currentHostId, currentSessionId, currentPlayerId });
                 renderLobby(lobby, isHost);
             }).catch(error => {
                 console.error('Failed to get lobby state:', error);
@@ -790,16 +780,12 @@ function handleReturnToLobby(lobbyDataFromUpdate = null) {
 
 
 function returnToLobby() {
-    console.log('returnToLobby called:', { isHost, currentHostId, currentSessionId });
-    
     if (!isHost || !currentHostId || !currentSessionId) {
-        console.log('Cannot return to lobby:', { isHost, currentHostId, currentSessionId });
         return;
     }
     
     const returnBtn = document.getElementById('return-to-lobby-btn');
     if (!returnBtn) {
-        console.error('Return to lobby button not found');
         return;
     }
     
@@ -807,14 +793,11 @@ function returnToLobby() {
     
     // Send via WebSocket if connected, otherwise via API
     if (websocketClient && websocketClient.ws && websocketClient.ws.readyState === WebSocket.OPEN) {
-        console.log('Sending return to lobby via WebSocket');
         websocketClient.sendReturnToLobby();
         // Note: Button will be re-enabled when handleReturnToLobby is called via WebSocket message
     } else {
-        console.log('Sending return to lobby via API');
         apiClient.returnToLobby(currentSessionId, currentHostId).then(() => {
             // Will be handled via WebSocket message or we need to manually handle it
-            console.log('Return to lobby API call succeeded');
         }).catch(error => {
             console.error('Failed to return to lobby:', error);
             returnBtn.disabled = false;

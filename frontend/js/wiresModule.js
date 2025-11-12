@@ -112,6 +112,11 @@ class WiresModule {
         const timeDisplay = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         document.getElementById('time-display').textContent = timeDisplay;
         
+        // Update timer on bomb screen
+        if (this.bomb3d && this.bomb3d.updateTimerDisplay) {
+            this.bomb3d.updateTimerDisplay(bombState.timeRemaining);
+        }
+        
         // Update strikes
         document.getElementById('strikes-count').textContent = bombState.strikes;
         

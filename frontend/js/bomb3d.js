@@ -1,4 +1,4 @@
-// Three.js 3D bomb rendering
+// Three.js 3D bomb rendering - Futuristic Design
 class Bomb3D {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -6,6 +6,7 @@ class Bomb3D {
         this.camera = null;
         this.renderer = null;
         this.bomb = null;
+        this.bombGroup = null; // Group to rotate the entire bomb
         this.wiresModule = null;
         this.wires = []; // Array of arrays: wires[moduleIndex] = array of wires for that module
         this.raycaster = new THREE.Raycaster();
@@ -13,14 +14,37 @@ class Bomb3D {
         this.selectedWire = null;
         this.selectedModule = null;
         
+        // Rotation state
+        this.isRotating = false;
+        this.rotationSpeed = 0.005;
+        this.bombRotationX = 0;
+        this.bombRotationY = 0;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
+        
+        // Zoom state
+        this.isZoomed = false;
+        this.zoomedModuleIndex = null;
+        this.zoomedModuleWorldPosition = null; // Store module world position for lookAt
+        this.originalCameraPosition = new THREE.Vector3();
+        this.originalCameraRotation = new THREE.Euler();
+        this.zoomAnimationProgress = 0;
+        this.zoomAnimationDuration = 500; // milliseconds
+        this.zoomAnimationStartTime = 0;
+        this.zoomStartPosition = new THREE.Vector3();
+        this.zoomTargetPosition = new THREE.Vector3();
+        
+        // Module hover state
+        this.hoveredModuleIndex = null;
+        
         this.init();
         this.setupEventListeners();
     }
     
     init() {
-        // Scene - lighter background
+        // Scene - off-white background (slightly less white)
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x4a4a4a);
+        this.scene.background = new THREE.Color(0xf5f5f5);
         
         // Camera
         const width = this.container.clientWidth;
@@ -28,37 +52,58 @@ class Bomb3D {
         this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
         this.camera.position.set(0, 0.8, 5);
         this.camera.lookAt(0, 0, 0);
+        // Store original camera position for zoom return
+        this.originalCameraPosition.set(0, 0.8, 5);
+        this.originalCameraRotation.copy(this.camera.rotation);
         
-        // Renderer
+        // Renderer - higher quality settings
         this.renderer = new THREE.WebGLRenderer({
             canvas: document.getElementById('bomb-canvas'),
             antialias: true,
+            powerPreference: "high-performance"
         });
         this.renderer.setSize(width, height);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.2;
         
-        // Enhanced lighting - much brighter
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+        // Enhanced lighting - futuristic setup
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         this.scene.add(ambientLight);
         
-        // Main directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        directionalLight.position.set(3, 5, 3);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        this.scene.add(directionalLight);
+        // Main directional light - positioned behind camera, pointing forward
+        this.directionalLight = new THREE.DirectionalLight(0xffffff, 1.8);
+        this.directionalLight.castShadow = true;
+        this.directionalLight.shadow.mapSize.width = 4096;
+        this.directionalLight.shadow.mapSize.height = 4096;
+        this.directionalLight.shadow.camera.near = 0.5;
+        this.directionalLight.shadow.camera.far = 50;
+        this.directionalLight.shadow.camera.left = -10;
+        this.directionalLight.shadow.camera.right = 10;
+        this.directionalLight.shadow.camera.top = 10;
+        this.directionalLight.shadow.camera.bottom = -10;
+        this.scene.add(this.directionalLight);
         
-        // Additional fill light from the side
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        fillLight.position.set(-3, 2, 2);
-        this.scene.add(fillLight);
+        // Accent light from side
+        const accentLight = new THREE.DirectionalLight(0x4ecdc4, 0.8);
+        accentLight.position.set(-3, 2, 2);
+        this.scene.add(accentLight);
         
-        // Rim light for better visibility
-        const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        // Rim light for depth
+        const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
         rimLight.position.set(0, 0, -5);
         this.scene.add(rimLight);
+        
+        // Point light for futuristic glow effect
+        const pointLight = new THREE.PointLight(0x4ecdc4, 0.5, 10);
+        pointLight.position.set(0, 2, 0);
+        this.scene.add(pointLight);
+        
+        // Create bomb group for rotation
+        this.bombGroup = new THREE.Group();
+        this.scene.add(this.bombGroup);
         
         // Create bomb
         this.createBomb();
@@ -68,64 +113,104 @@ class Bomb3D {
     }
     
     createBomb() {
-        // Main bomb body (rectangular box - wider than tall)
-        // Width: 4, Height: 2, Depth: 1.2
-        const bombGeometry = new THREE.BoxGeometry(4, 2, 1.2);
+        // Main bomb body - futuristic metallic design
+        const bombGeometry = new THREE.BoxGeometry(4, 2, 1.2, 8, 4, 4); // Higher resolution
         const bombMaterial = new THREE.MeshStandardMaterial({
-            color: 0x6a6a6a,  // Lighter gray
-            metalness: 0.3,
-            roughness: 0.7,
+            color: 0x2a2a2a,
+            metalness: 0.8,
+            roughness: 0.2,
+            emissive: 0x000000,
         });
         this.bomb = new THREE.Mesh(bombGeometry, bombMaterial);
         this.bomb.position.y = 0;
         this.bomb.castShadow = true;
         this.bomb.receiveShadow = true;
-        this.scene.add(this.bomb);
+        this.bombGroup.add(this.bomb);
         
-        // Top face
-        const topGeometry = new THREE.BoxGeometry(4, 0.1, 1.2);
+        // Top face with tech pattern
+        const topGeometry = new THREE.BoxGeometry(4, 0.1, 1.2, 8, 1, 4);
         const topMaterial = new THREE.MeshStandardMaterial({
-            color: 0x5a5a5a,
-            metalness: 0.2,
-            roughness: 0.8,
+            color: 0x1a1a1a,
+            metalness: 0.9,
+            roughness: 0.1,
         });
         const top = new THREE.Mesh(topGeometry, topMaterial);
         top.position.y = 1.05;
-        this.scene.add(top);
+        this.bombGroup.add(top);
         
-        // Timer display (top center of bomb) - rectangular
-        const timerGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.15);
+        // Timer display - futuristic design
+        const timerGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.15, 4, 2, 2);
         const timerMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x1a1a1a,
-            metalness: 0.1,
-            roughness: 0.9,
+            color: 0x0a0a0a,
+            metalness: 0.95,
+            roughness: 0.05,
         });
         const timer = new THREE.Mesh(timerGeometry, timerMaterial);
         timer.position.y = 1.15;
         timer.position.z = 0.5;
-        this.scene.add(timer);
+        this.bombGroup.add(timer);
         
-        // Timer screen (green/black) - rectangular
-        const screenGeometry = new THREE.BoxGeometry(0.55, 0.15, 0.02);
+        // Create canvas for timer text
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 64;
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#000000';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = '#00ff00';
+        context.font = 'bold 48px "Courier New", monospace';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText('00:00', canvas.width / 2, canvas.height / 2);
+        
+        // Timer screen with text texture
+        const screenGeometry = new THREE.PlaneGeometry(0.55, 0.15);
+        const screenTexture = new THREE.CanvasTexture(canvas);
+        screenTexture.needsUpdate = true;
         const screenMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x00ff00,
+            map: screenTexture,
             emissive: 0x002200,
+            emissiveIntensity: 0.5,
         });
         const screen = new THREE.Mesh(screenGeometry, screenMaterial);
         screen.position.y = 1.16;
         screen.position.z = 0.6;
-        this.scene.add(screen);
+        this.bombGroup.add(screen);
+        
+        // Store references for updating
+        this.timerScreen = screen;
+        this.timerCanvas = canvas;
+        this.timerContext = context;
+        this.timerTexture = screenTexture;
+        
+        // Tech accents - corner details
+        const accentGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.05);
+        const accentMaterial = new THREE.MeshStandardMaterial({
+            color: 0x4ecdc4,
+            emissive: 0x004444,
+            emissiveIntensity: 0.5,
+            metalness: 0.9,
+            roughness: 0.1,
+        });
+        
+        // Add corner accents
+        const corners = [
+            { x: -1.9, y: 0.9, z: 0.6 },
+            { x: 1.9, y: 0.9, z: 0.6 },
+            { x: -1.9, y: -0.9, z: 0.6 },
+            { x: 1.9, y: -0.9, z: 0.6 },
+        ];
+        corners.forEach(pos => {
+            const accent = new THREE.Mesh(accentGeometry, accentMaterial);
+            accent.position.set(pos.x, pos.y, pos.z);
+            this.bombGroup.add(accent);
+        });
         
         // Create 6 module panels (3x2 grid) on front face
         this.createModulePanels();
     }
     
     createModulePanels() {
-        // Create 6 module panels in a 3x2 grid
-        // Panel size: 1.1 x 0.85
-        // Spacing between panels: 0.1
-        // Grid: 3 columns, 2 rows
-        
         const panelWidth = 1.1;
         const panelHeight = 0.85;
         const spacing = 0.15;
@@ -142,48 +227,72 @@ class Bomb3D {
             for (let col = 0; col < 3; col++) {
                 const x = startX + col * (panelWidth + spacing);
                 const y = startY - row * (panelHeight + spacing);
+                const moduleIndex = row * 3 + col;
                 
-                // Panel background
-                const panelGeometry = new THREE.PlaneGeometry(panelWidth, panelHeight);
+                // Panel background - futuristic dark panel
+                const panelGeometry = new THREE.PlaneGeometry(panelWidth, panelHeight, 4, 4);
                 const panelMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x3a3a3a,  // Darker gray for contrast
-                    metalness: 0.2,
-                    roughness: 0.8,
+                    color: 0x1a1a1a,
+                    metalness: 0.6,
+                    roughness: 0.4,
+                    emissive: 0x000000,
                 });
                 const panel = new THREE.Mesh(panelGeometry, panelMaterial);
                 panel.position.set(x, y, 0.61);
-                this.scene.add(panel);
+                panel.userData = { moduleIndex, type: 'module' };
+                this.bombGroup.add(panel);
                 
-                // Panel border/frame
-                const borderGeometry = new THREE.PlaneGeometry(panelWidth + 0.05, panelHeight + 0.05);
+                // Panel border/frame - tech frame
+                const borderGeometry = new THREE.PlaneGeometry(panelWidth + 0.05, panelHeight + 0.05, 4, 4);
                 const borderMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x2a2a2a,
-                    metalness: 0.1,
-                    roughness: 0.9,
+                    color: 0x0a0a0a,
+                    metalness: 0.8,
+                    roughness: 0.2,
                 });
                 const border = new THREE.Mesh(borderGeometry, borderMaterial);
                 border.position.set(x, y, 0.605);
-                this.scene.add(border);
+                this.bombGroup.add(border);
+                
+                // Inner tech border
+                const innerBorderGeometry = new THREE.PlaneGeometry(panelWidth - 0.05, panelHeight - 0.05, 4, 4);
+                const innerBorderMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a,
+                    metalness: 0.7,
+                    roughness: 0.3,
+                });
+                const innerBorder = new THREE.Mesh(innerBorderGeometry, innerBorderMaterial);
+                innerBorder.position.set(x, y, 0.607);
+                this.bombGroup.add(innerBorder);
                 
                 // Create glow border for module (initially invisible)
-                // Use a slightly larger plane positioned behind the module to create a glow effect
                 const glowWidth = panelWidth + 0.15;
                 const glowHeight = panelHeight + 0.15;
-                const glowGeometry = new THREE.PlaneGeometry(glowWidth, glowHeight);
+                const glowGeometry = new THREE.PlaneGeometry(glowWidth, glowHeight, 4, 4);
                 const glowMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x00ff00,
-                    emissive: 0x00ff00,
+                    color: 0xffff00, // Yellow for hover/interaction
+                    emissive: 0xffff00,
                     emissiveIntensity: 0,
                     transparent: true,
                     opacity: 0,
                     side: THREE.DoubleSide,
-                    depthWrite: false, // Don't write to depth buffer so it doesn't occlude
+                    depthWrite: false,
                 });
                 const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-                glow.position.set(x, y, 0.608); // Slightly behind the module
-                this.scene.add(glow);
+                glow.position.set(x, y, 0.608);
+                glow.userData = { moduleIndex, type: 'glow' };
+                this.bombGroup.add(glow);
                 
-                this.modulePanels.push({ panel, border, x, y, row, col });
+                this.modulePanels.push({ 
+                    panel, 
+                    border, 
+                    innerBorder,
+                    glow,
+                    x, 
+                    y, 
+                    row, 
+                    col,
+                    moduleIndex 
+                });
                 this.moduleGlows.push({ glow, material: glowMaterial });
             }
         }
@@ -198,7 +307,7 @@ class Bomb3D {
         // Remove all existing wires
         this.wires.forEach(moduleWires => {
             moduleWires.forEach(wire => {
-                this.scene.remove(wire);
+                this.bombGroup.remove(wire);
             });
         });
         this.wires = [];
@@ -231,10 +340,10 @@ class Bomb3D {
                     wiresConfig.cutWires.includes(wireIndex), 
                     modulePanel.x,
                     moduleIndex,
-                    panelWidth * 0.8 // Wire length fits in panel
+                    panelWidth * 0.8
                 );
                 moduleWires.push(wire);
-                this.scene.add(wire);
+                this.bombGroup.add(wire);
             });
             
             this.wires[moduleIndex] = moduleWires;
@@ -255,33 +364,33 @@ class Bomb3D {
         
         const wireColor = colorMap[color] || 0xffffff;
         
-        // Wire geometry (horizontal line) - thicker and more visible
-        const wireGeometry = new THREE.CylinderGeometry(0.03, 0.03, wireLength, 12);
+        // Wire geometry - higher resolution
+        const wireGeometry = new THREE.CylinderGeometry(0.03, 0.03, wireLength, 16);
         
-        // Special handling for white wires to make them more distinguishable
-        let emissiveColor = new THREE.Color(wireColor).multiplyScalar(0.1);
+        // Enhanced emissive for futuristic look
+        let emissiveColor = new THREE.Color(wireColor).multiplyScalar(0.15);
         if (wireColor === 0xffffff) {
-            // White wire: brighter emissive to make it stand out
-            emissiveColor = new THREE.Color(0xffffff).multiplyScalar(0.3);
+            emissiveColor = new THREE.Color(0xffffff).multiplyScalar(0.4);
         }
         
         const wireMaterial = new THREE.MeshStandardMaterial({
             color: wireColor,
-            metalness: 0.4,
-            roughness: 0.6,
+            metalness: 0.5,
+            roughness: 0.5,
             emissive: emissiveColor,
+            emissiveIntensity: 0.8,
         });
         
         const wire = new THREE.Mesh(wireGeometry, wireMaterial);
         wire.rotation.z = Math.PI / 2;
-        wire.position.set(xPos, yPos, 0.62); // On the front face of the box, positioned in the module panel
+        wire.position.set(xPos, yPos, 0.62);
         wire.userData = { index, color, isCut, moduleIndex };
         
-        // Add outline for white wires to improve visibility
+        // Add outline for white wires
         if (wireColor === 0xffffff) {
-            const outlineGeometry = new THREE.CylinderGeometry(0.032, 0.032, wireLength, 12);
+            const outlineGeometry = new THREE.CylinderGeometry(0.032, 0.032, wireLength, 16);
             const outlineMaterial = new THREE.MeshBasicMaterial({
-                color: 0x000000, // Black outline for white
+                color: 0x000000,
                 side: THREE.BackSide,
             });
             const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
@@ -302,21 +411,270 @@ class Bomb3D {
     }
     
     setupEventListeners() {
+        // Mouse move for raycaster
         this.container.addEventListener('mousemove', (event) => {
             const rect = this.container.getBoundingClientRect();
             this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            // Handle rotation
+            if (this.isRotating && !this.isZoomed) {
+                const deltaX = event.clientX - this.lastMouseX;
+                const deltaY = event.clientY - this.lastMouseY;
+                
+                this.bombRotationY += deltaX * this.rotationSpeed;
+                this.bombRotationX += deltaY * this.rotationSpeed;
+                
+                // Limit vertical rotation
+                this.bombRotationX = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, this.bombRotationX));
+            }
+            
+            this.lastMouseX = event.clientX;
+            this.lastMouseY = event.clientY;
+            
+            // Module hover detection
+            if (!this.isZoomed) {
+                this.handleModuleHover();
+            }
         });
         
-        this.container.addEventListener('click', (event) => {
-            this.handleClick(event);
+        // Mouse down - start rotation
+        this.container.addEventListener('mousedown', (event) => {
+            if (!this.isZoomed && event.button === 0) { // Left mouse button
+                this.isRotating = true;
+                this.lastMouseX = event.clientX;
+                this.lastMouseY = event.clientY;
+                this.container.style.cursor = 'grabbing';
+            }
         });
+        
+        // Mouse up - stop rotation
+        this.container.addEventListener('mouseup', (event) => {
+            if (event.button === 0) {
+                this.isRotating = false;
+                this.container.style.cursor = this.isZoomed ? 'default' : 'grab';
+            }
+        });
+        
+        // Mouse leave - stop rotation
+        this.container.addEventListener('mouseleave', () => {
+            this.isRotating = false;
+            this.container.style.cursor = this.isZoomed ? 'default' : 'grab';
+        });
+        
+        // Click handler
+        this.container.addEventListener('click', (event) => {
+            if (this.isZoomed) {
+                // Handle wire clicks in zoom mode
+                this.handleClick(event);
+            } else {
+                // Check for module panel click first
+                if (this.handleModuleClick(event)) {
+                    return; // Module was clicked, don't check wires
+                }
+                // Otherwise check for wire clicks
+                this.handleClick(event);
+            }
+        });
+        
+        // ESC key handler
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.isZoomed) {
+                this.exitZoom();
+            }
+        });
+        
+        // Set initial cursor
+        this.container.style.cursor = 'grab';
+    }
+    
+    handleModuleHover() {
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        
+        // Check module panels
+        const moduleObjects = this.modulePanels.map(mp => mp.panel);
+        const intersects = this.raycaster.intersectObjects(moduleObjects);
+        
+        if (intersects.length > 0) {
+            const moduleIndex = intersects[0].object.userData.moduleIndex;
+            if (moduleIndex !== this.hoveredModuleIndex) {
+                // Remove previous hover
+                if (this.hoveredModuleIndex !== null) {
+                    this.setModuleHover(this.hoveredModuleIndex, false);
+                }
+                // Set new hover
+                this.hoveredModuleIndex = moduleIndex;
+                this.setModuleHover(moduleIndex, true);
+                this.container.style.cursor = 'pointer';
+            }
+        } else {
+            // Remove hover
+            if (this.hoveredModuleIndex !== null) {
+                this.setModuleHover(this.hoveredModuleIndex, false);
+                this.hoveredModuleIndex = null;
+                this.container.style.cursor = 'grab';
+            }
+        }
+    }
+    
+    setModuleHover(moduleIndex, isHovered) {
+        if (!this.moduleGlows || moduleIndex < 0 || moduleIndex >= this.moduleGlows.length) {
+            return;
+        }
+        
+        const glowData = this.moduleGlows[moduleIndex];
+        if (!glowData) return;
+        
+        // Don't show yellow hover if module is already showing success (green) or error (red)
+        const currentColor = glowData.material.color.getHex();
+        const isSuccess = currentColor === 0x00ff00;
+        const isError = currentColor === 0xff0000;
+        
+        if (isHovered && !isSuccess && !isError) {
+            // Yellow for hover/interaction
+            glowData.material.color.setHex(0xffff00);
+            glowData.material.emissive.setHex(0xffff00);
+            glowData.material.emissiveIntensity = 0.8;
+            glowData.material.opacity = 0.6;
+        } else if (!isHovered && !isSuccess && !isError) {
+            // Hide glow
+            glowData.material.emissiveIntensity = 0;
+            glowData.material.opacity = 0;
+        }
+    }
+    
+    handleModuleClick(event) {
+        if (this.isZoomed) return false;
+        
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        
+        // Check module panels
+        const moduleObjects = this.modulePanels.map(mp => mp.panel);
+        const intersects = this.raycaster.intersectObjects(moduleObjects);
+        
+        if (intersects.length > 0) {
+            const moduleIndex = intersects[0].object.userData.moduleIndex;
+            this.zoomToModule(moduleIndex);
+            return true;
+        }
+        
+        return false;
+    }
+    
+    zoomToModule(moduleIndex) {
+        if (!this.modulePanels || moduleIndex < 0 || moduleIndex >= this.modulePanels.length) {
+            return;
+        }
+        
+        const modulePanel = this.modulePanels[moduleIndex];
+        if (!modulePanel) return;
+        
+        // Reset bomb rotation first so we can calculate positions correctly
+        this.bombRotationX = 0;
+        this.bombRotationY = 0;
+        this.bombGroup.rotation.x = 0;
+        this.bombGroup.rotation.y = 0;
+        this.bombGroup.rotation.z = 0;
+        
+        // Now get module's world position with bomb at default rotation
+        const moduleWorldPosition = new THREE.Vector3();
+        modulePanel.panel.getWorldPosition(moduleWorldPosition);
+        
+        // Calculate camera position: module is on the front face (z = 0.61 in local space)
+        // Camera should be positioned along the +Z axis (forward direction) from the module
+        // Since bomb is now at rotation (0,0,0), the forward direction is simply (0, 0, 1)
+        const forwardDirection = new THREE.Vector3(0, 0, 1);
+        const zoomDistance = 2.5; // Closer distance for better module view
+        
+        // Position camera directly in front of the module, along the forward direction
+        const targetPosition = moduleWorldPosition.clone();
+        targetPosition.add(forwardDirection.multiplyScalar(zoomDistance));
+        
+        this.zoomTargetPosition.copy(targetPosition);
+        this.zoomStartPosition.copy(this.camera.position);
+        this.zoomAnimationStartTime = Date.now();
+        this.zoomAnimationProgress = 0;
+        this.isZoomed = true;
+        this.zoomedModuleIndex = moduleIndex;
+        
+        // Store module world position for lookAt
+        this.zoomedModuleWorldPosition = moduleWorldPosition.clone();
+        
+        // Disable rotation
+        this.isRotating = false;
+        this.container.style.cursor = 'default';
+        
+        // Remove hover state
+        if (this.hoveredModuleIndex !== null) {
+            this.setModuleHover(this.hoveredModuleIndex, false);
+            this.hoveredModuleIndex = null;
+        }
+    }
+    
+    exitZoom() {
+        if (!this.isZoomed) return;
+        
+        this.zoomStartPosition.copy(this.camera.position);
+        this.zoomTargetPosition.copy(this.originalCameraPosition);
+        this.zoomAnimationStartTime = Date.now();
+        this.zoomAnimationProgress = 0;
+        this.isZoomed = false;
+        this.zoomedModuleIndex = null;
+        this.zoomedModuleWorldPosition = null;
+        this.container.style.cursor = 'grab';
+    }
+    
+    updateZoomAnimation() {
+        if (!this.isZoomed && this.zoomAnimationProgress >= 1) {
+            return; // Already at original position
+        }
+        
+        const elapsed = Date.now() - this.zoomAnimationStartTime;
+        this.zoomAnimationProgress = Math.min(elapsed / this.zoomAnimationDuration, 1);
+        
+        // Smooth easing function (ease in-out)
+        const easeProgress = this.zoomAnimationProgress < 0.5
+            ? 2 * this.zoomAnimationProgress * this.zoomAnimationProgress
+            : 1 - Math.pow(-2 * this.zoomAnimationProgress + 2, 2) / 2;
+        
+        // Interpolate camera position
+        const previousPosition = this.camera.position.clone();
+        
+        // Safety check: ensure start and target positions are valid
+        if (this.zoomStartPosition.length() === 0 || isNaN(this.zoomStartPosition.x)) {
+            console.error('Invalid zoom start position:', this.zoomStartPosition);
+            this.zoomStartPosition.copy(this.camera.position);
+        }
+        if (this.zoomTargetPosition.length() === 0 || isNaN(this.zoomTargetPosition.x)) {
+            console.error('Invalid zoom target position:', this.zoomTargetPosition);
+            // Use a safe default position
+            this.zoomTargetPosition.set(0, 0.8, 5);
+        }
+        
+        this.camera.position.lerpVectors(this.zoomStartPosition, this.zoomTargetPosition, easeProgress);
+        
+        // Look at module when zoomed, or origin when not zoomed
+        if (this.isZoomed && this.zoomedModuleIndex !== null && this.zoomedModuleWorldPosition) {
+            // Look at the module's world position
+            this.camera.lookAt(this.zoomedModuleWorldPosition);
+        } else if (this.zoomAnimationProgress < 1) {
+            // During exit zoom animation, look at origin
+            this.camera.lookAt(0, 0, 0);
+        } else {
+            // Normal view - look at bomb center
+            this.camera.lookAt(0, 0, 0);
+        }
+        
+        if (this.zoomAnimationProgress < 1) {
+            // Continue animation
+            return;
+        }
     }
     
     handleClick(event) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
-        // Check all modules' wires - use recursive traversal to include all children (wire mesh and outline)
+        // Check all modules' wires
         let allWireGroups = [];
         this.wires.forEach(moduleWires => {
             if (moduleWires) {
@@ -324,16 +682,13 @@ class Bomb3D {
             }
         });
         
-        // Use recursive: true to check all children (including outline meshes for white wires)
         const intersects = this.raycaster.intersectObjects(allWireGroups, true);
         
         if (intersects.length > 0) {
-            // Find the wireGroup by traversing up the parent chain
-            // This handles cases where we click on the outline mesh (for white wires) or the wire mesh itself
             let clickedObject = intersects[0].object;
             let wireGroup = null;
             
-            // Traverse up to find the wireGroup (which has userData with index, color, etc.)
+            // Traverse up to find the wireGroup
             while (clickedObject) {
                 if (clickedObject.userData && clickedObject.userData.index !== undefined && clickedObject.userData.moduleIndex !== undefined) {
                     wireGroup = clickedObject;
@@ -365,36 +720,36 @@ class Bomb3D {
             if (this.wires[this.selectedModule] && this.wires[this.selectedModule][this.selectedWire]) {
                 const prevWire = this.findWireMesh(this.wires[this.selectedModule][this.selectedWire]);
                 if (prevWire && prevWire.material && prevWire.material.emissive) {
-                    prevWire.material.emissive.setHex(0x000000);
+                    const color = prevWire.material.color;
+                    prevWire.material.emissive.setRGB(
+                        color.r * 0.15,
+                        color.g * 0.15,
+                        color.b * 0.15
+                    );
                 }
             }
         }
         
-        // Highlight selected wire - more visible
+        // Highlight selected wire
         if (this.wires[moduleIndex] && wireIndex >= 0 && wireIndex < this.wires[moduleIndex].length) {
             this.selectedModule = moduleIndex;
             this.selectedWire = wireIndex;
             const wire = this.findWireMesh(this.wires[moduleIndex][wireIndex]);
             if (wire && wire.material && wire.material.emissive) {
-                // Make wire glow by setting emissive to a brighter version
-                const r = wire.material.color.r * 0.4;
-                const g = wire.material.color.g * 0.4;
-                const b = wire.material.color.b * 0.4;
+                const r = wire.material.color.r * 0.6;
+                const g = wire.material.color.g * 0.6;
+                const b = wire.material.color.b * 0.6;
                 wire.material.emissive.setRGB(r, g, b);
             }
         }
     }
     
-    // Helper function to find the wire mesh (not the outline) in a wireGroup
     findWireMesh(wireGroup) {
         for (let child of wireGroup.children) {
-            // The wire mesh uses MeshStandardMaterial (which has emissive)
-            // The outline uses MeshBasicMaterial (which doesn't have emissive)
             if (child.material && child.material.emissive !== undefined) {
                 return child;
             }
         }
-        // Fallback: return first child if no mesh with emissive found
         return wireGroup.children[0];
     }
     
@@ -413,7 +768,32 @@ class Bomb3D {
     animate() {
         requestAnimationFrame(() => this.animate());
         
-        // No rotation - bomb stays still
+        // Update zoom animation
+        this.updateZoomAnimation();
+        
+        // Update directional light to be behind and above camera, pointing forward
+        const cameraDirection = new THREE.Vector3();
+        this.camera.getWorldDirection(cameraDirection);
+        const lightOffset = cameraDirection.clone().multiplyScalar(-2); // Behind camera
+        const upOffset = new THREE.Vector3(0, 1, 0); // Up direction
+        this.directionalLight.position.copy(this.camera.position).add(lightOffset).add(upOffset.multiplyScalar(1.5));
+        // Point the light in the camera's forward direction
+        const lookAtPoint = this.camera.position.clone().add(cameraDirection.multiplyScalar(10));
+        this.directionalLight.lookAt(lookAtPoint);
+        
+        // Apply bomb rotation - keep at 0 when zoomed, otherwise use current rotation
+        if (this.isZoomed) {
+            // Keep rotation at 0 when zoomed (already reset in zoomToModule)
+            this.bombGroup.rotation.y = 0;
+            this.bombGroup.rotation.x = 0;
+            this.bombRotationY = 0;
+            this.bombRotationX = 0;
+        } else {
+            // Normal rotation when not zoomed
+            this.bombGroup.rotation.y = this.bombRotationY;
+            this.bombGroup.rotation.x = this.bombRotationX;
+        }
+        
         this.renderer.render(this.scene, this.camera);
     }
     
@@ -436,11 +816,48 @@ class Bomb3D {
         const glowData = this.moduleGlows[moduleIndex];
         if (!glowData) return;
         
-        // Set green color and make visible
+        // Set green color for success
         glowData.material.color.setHex(0x00ff00);
         glowData.material.emissive.setHex(0x00ff00);
-        glowData.material.emissiveIntensity = 1.0;
-        glowData.material.opacity = 0.8;
+        glowData.material.emissiveIntensity = 1.2;
+        glowData.material.opacity = 0.9;
+    }
+    
+    // Update timer display on bomb screen
+    updateTimerDisplay(timeRemaining) {
+        if (!this.timerCanvas || !this.timerContext || !this.timerTexture) return;
+        
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+        const timeDisplay = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        
+        // Clear canvas
+        this.timerContext.fillStyle = '#000000';
+        this.timerContext.fillRect(0, 0, this.timerCanvas.width, this.timerCanvas.height);
+        
+        // Determine color based on time remaining
+        let color = '#00ff00'; // Green (default)
+        if (timeRemaining < 60) { // Less than 1 minute - red
+            color = '#ff0000';
+        } else if (timeRemaining < 120) { // Less than 2 minutes - orange
+            color = '#ff8800';
+        }
+        
+        // Draw timer text
+        this.timerContext.fillStyle = color;
+        this.timerContext.font = 'bold 48px "Courier New", monospace';
+        this.timerContext.textAlign = 'center';
+        this.timerContext.textBaseline = 'middle';
+        this.timerContext.fillText(timeDisplay, this.timerCanvas.width / 2, this.timerCanvas.height / 2);
+        
+        // Update texture
+        this.timerTexture.needsUpdate = true;
+        
+        // Update emissive color to match text color
+        if (this.timerScreen && this.timerScreen.material) {
+            const emissiveColor = color === '#ff0000' ? 0x220000 : color === '#ff8800' ? 0x221100 : 0x002200;
+            this.timerScreen.material.emissive.setHex(emissiveColor);
+        }
     }
     
     // Show red flash around module for 1 second when strike occurs
@@ -452,7 +869,7 @@ class Bomb3D {
         const glowData = this.moduleGlows[moduleIndex];
         if (!glowData) return;
         
-        // Set red color
+        // Set red color for error
         glowData.material.color.setHex(0xff0000);
         glowData.material.emissive.setHex(0xff0000);
         glowData.material.emissiveIntensity = 2.0;
@@ -460,7 +877,7 @@ class Bomb3D {
         
         // Animate fade out over 1 second
         const startTime = Date.now();
-        const duration = 1000; // 1 second
+        const duration = 1000;
         
         const animate = () => {
             const elapsed = Date.now() - startTime;
@@ -473,13 +890,15 @@ class Bomb3D {
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
-                // Reset to invisible
-                glowData.material.opacity = 0;
-                glowData.material.emissiveIntensity = 0;
+                // Reset to invisible (unless module is solved)
+                // Check if module is solved by checking if it's still green
+                if (glowData.material.color.getHex() !== 0x00ff00) {
+                    glowData.material.opacity = 0;
+                    glowData.material.emissiveIntensity = 0;
+                }
             }
         };
         
         animate();
     }
 }
-
