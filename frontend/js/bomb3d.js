@@ -23,7 +23,12 @@ class Bomb3D {
         this.buttonManager = new ButtonManager(this.bombGroup, this.bombGeometry.modulePanels);
         
         // Initialize terminal manager
-        this.terminalManager = new TerminalManager(this.bombGroup, this.bombGeometry.modulePanels);
+        this.terminalManager = new TerminalManager(
+            this.bombGroup, 
+            this.bombGeometry.modulePanels,
+            this.sceneManager.camera,
+            this.container
+        );
         
         // Initialize visual feedback manager
         this.visualFeedbackManager = new VisualFeedbackManager(

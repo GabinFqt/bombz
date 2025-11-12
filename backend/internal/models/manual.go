@@ -823,67 +823,80 @@ func GenerateTerminalModuleRulesWithSeed(seed int64, terminalTexts []string) (*T
 }
 
 // GenerateComprehensiveTerminalModuleManual generates a comprehensive manual for terminal modules
-// This generates rules for all possible terminal text combinations
+// Creates 20 different terminal text → command mappings
 func GenerateComprehensiveTerminalModuleManual(seed int64) *ModuleManual {
-	// We need to generate rules for all possible terminal text combinations
-	// Since terminal texts are randomly selected per module, we'll generate a comprehensive manual
-	// that covers all possible texts
+	// Create a seeded RNG for deterministic generation
+	rng := rand.New(rand.NewSource(seed))
 
-	// Import terminal text templates from terminal.go (we'll reference them)
-	// For now, generate rules for common patterns
-
-	// Create a comprehensive manual that lists rules for common terminal texts
-	allTerminalTexts := []string{
-		"System initialized. Enter commands:",
-		"Terminal ready. Awaiting input:",
-		"Command prompt active. Type commands:",
-		"System online. Enter commands:",
-		"Terminal interface loaded. Commands:",
-		"Access granted. Enter command:",
-		"System boot complete. Commands:",
-		"Interface active. Type command:",
-		"Command accepted. Next:",
-		"Processing... Next command:",
-		"Executed. Enter next:",
-		"Success. Continue:",
-		"Accepted. Next input:",
-		"Done. Type next command:",
-		"Complete. Next:",
-		"Command accepted. Final:",
-		"Processing... Final command:",
-		"Executed. Last input:",
-		"Success. Final command:",
-		"Accepted. Last:",
-		"Done. Type final command:",
-		"Complete. Final:",
+	// Command words pool
+	commandWords := []string{
+		"RED", "BLUE", "GREEN", "WHITE", "YELLOW",
+		"ABORT", "DETONATE", "HOLD", "PRESS", "OTHER",
+		"FIRST", "SECOND", "THIRD", "LAST",
+		"ENTER", "EXECUTE", "RUN", "START", "STOP",
+		"YES", "NO", "ACCEPT", "DENY", "CONFIRM",
+		"UP", "DOWN", "LEFT", "RIGHT",
+		"ALPHA", "BRAVO", "CHARLIE", "DELTA",
 	}
 
-	// Generate rules for all possible texts (this will be a large manual)
-	// But for now, we'll use a seed-based approach that generates rules dynamically
-	// The actual rules will be generated per module based on the terminal texts
+	// Combine all terminal text templates
+	allTerminalTexts := append(append(
+		initialTerminalTexts,
+		afterFirstCommandTexts...),
+		afterSecondCommandTexts...)
 
-	// For comprehensive manual, we'll create a template that shows the pattern
-	manualRules := []ManualRule{
-		{
-			Number:      1,
-			Description: "Look at the text displayed in the terminal. Match it with the rules below to determine the first command.",
-		},
-		{
-			Number:      2,
-			Description: "After typing the first command, the terminal will show new text. Match it with the rules below for the second command.",
-		},
-		{
-			Number:      3,
-			Description: "After typing the second command, the terminal will show new text. Match it with the rules below for the final command.",
-		},
+	// Generate 20 unique combinations
+	manualRules := make([]ManualRule, 0, 20)
+	usedTexts := make(map[string]bool)
+	usedCommands := make(map[string]bool)
+
+	for i := 0; i < 20; i++ {
+		// Pick a random terminal text (avoid duplicates)
+		var terminalText string
+		var attempts int
+		for {
+			textIdx := rng.Intn(len(allTerminalTexts))
+			terminalText = allTerminalTexts[textIdx]
+			if !usedTexts[terminalText] {
+				usedTexts[terminalText] = true
+				break
+			}
+			attempts++
+			if attempts > 1000 {
+				// If we run out of unique texts, allow reuse
+				textIdx = rng.Intn(len(allTerminalTexts))
+				terminalText = allTerminalTexts[textIdx]
+				break
+			}
+		}
+
+		// Pick a random command word (avoid duplicates if possible)
+		var commandWord string
+		attempts = 0
+		for {
+			cmdIdx := rng.Intn(len(commandWords))
+			commandWord = commandWords[cmdIdx]
+			if !usedCommands[commandWord] || attempts > 50 {
+				usedCommands[commandWord] = true
+				break
+			}
+			attempts++
+		}
+
+		// Create rule
+		description := fmt.Sprintf("If terminal says \"%s\", type %s.", terminalText, commandWord)
+		manualRules = append(manualRules, ManualRule{
+			Number:      i + 1,
+			Description: description,
+		})
 	}
 
 	moduleManual := &ModuleManual{
 		Title:        "Bombz Manual - Terminal Module",
 		Rules:        manualRules,
-		Instructions: "As an expert, your job is to guide the defuser through the terminal module. Look at what text is displayed in the terminal and tell the defuser which command to type based on the rules provided for each terminal module. The defuser must type 3 commands in order. After each correct command, the terminal will display new text.",
+		Instructions: "As an expert, your job is to guide the defuser through the terminal module. Look at what text is displayed in the terminal and tell the defuser which command to type based on these rules. The defuser must type 3 commands in order. Each terminal will randomly use 3 of these 20 rules. After each correct command, the terminal will display new text.",
 		ModuleData: map[string]interface{}{
-			"allTerminalTexts": allTerminalTexts,
+			"commandWords": commandWords,
 		},
 	}
 
@@ -935,19 +948,12 @@ func GetManualContent(bomb *Bomb) *ManualContent {
 		content.Modules["buttonModule"] = buttonManual
 	}
 
-	// Add terminal module manuals if bomb has terminal modules
-	// Each terminal module has its own manual based on its terminal texts
+	// Add terminal module manual if bomb has terminal modules
+	// All terminal modules share the same rules
 	if bomb != nil && len(bomb.TerminalModules) > 0 {
-		// Add comprehensive manual as general reference
-		terminalManual := GenerateComprehensiveTerminalModuleManual(seed)
-		content.Modules["terminalModule"] = terminalManual
-
-		// Also add specific manuals for each terminal module from ModuleRules
-		for i := 0; i < len(bomb.TerminalModules); i++ {
-			moduleKey := fmt.Sprintf("terminalModule%d", i)
-			if manual, exists := bomb.ModuleRules[moduleKey]; exists {
-				content.Modules[moduleKey] = manual
-			}
+		// All terminals use the same manual from ModuleRules
+		if manual, exists := bomb.ModuleRules["terminalModule"]; exists {
+			content.Modules["terminalModule"] = manual
 		}
 	}
 

@@ -132,6 +132,10 @@ class InteractionManager {
                 if (intersects.length === 0) {
                     // Clicked outside the bomb - exit zoom
                     this.zoomManager.exitZoom();
+                    // Hide terminal input overlay if active
+                    if (this.terminalManager) {
+                        this.terminalManager.hideInputOverlay();
+                    }
                     this.container.style.cursor = 'grab';
                     return;
                 }
@@ -154,11 +158,23 @@ class InteractionManager {
         
         // ESC key handler
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && this.zoomManager.isZoomed) {
-                this.zoomManager.exitZoom();
-                this.container.style.cursor = 'grab';
+            if (event.key === 'Escape') {
+                if (this.terminalManager && this.terminalManager.activeTerminalIndex !== null) {
+                    // Hide terminal input overlay
+                    this.terminalManager.hideInputOverlay();
+                } else if (this.zoomManager.isZoomed) {
+                    this.zoomManager.exitZoom();
+                    // Hide terminal input overlay if active
+                    if (this.terminalManager) {
+                        this.terminalManager.hideInputOverlay();
+                    }
+                    this.container.style.cursor = 'grab';
+                }
             }
         });
+        
+        // Terminal input handlers
+        this.setupTerminalInputHandlers();
         
         // Mouse wheel dezoom handler
         this.container.addEventListener('wheel', (event) => {
@@ -167,6 +183,10 @@ class InteractionManager {
                 event.preventDefault();
                 // Exit zoom on any wheel movement when zoomed
                 this.zoomManager.exitZoom();
+                // Hide terminal input overlay if active
+                if (this.terminalManager) {
+                    this.terminalManager.hideInputOverlay();
+                }
                 this.container.style.cursor = 'grab';
             }
         }, { passive: false });
@@ -197,6 +217,10 @@ class InteractionManager {
                 // If fingers are moving apart (pinch-out), dezoom
                 if (currentDistance > this.touchStartDistance * 1.2) {
                     this.zoomManager.exitZoom();
+                    // Hide terminal input overlay if active
+                    if (this.terminalManager) {
+                        this.terminalManager.hideInputOverlay();
+                    }
                     this.container.style.cursor = 'grab';
                     this.touchStartDistance = null;
                     this.touchStartTime = null;
@@ -668,19 +692,88 @@ class InteractionManager {
             const intersects = this.raycaster.intersectObject(terminalGroup, true);
             
             if (intersects.length > 0) {
-                // Show prompt for command input
-                const command = prompt(`Enter command ${terminalModule.currentStep + 1}/3:`);
-                if (command !== null && command.trim() !== '') {
-                    // Send command via global handler
-                    if (window.onTerminalCommand) {
-                        window.onTerminalCommand(terminalModuleIndex, command.trim());
-                    }
+                // Show input overlay for terminal
+                console.log('Terminal clicked, showing input overlay for module', terminalModuleIndex);
+                if (this.terminalManager) {
+                    this.terminalManager.showInputOverlay(terminalModuleIndex);
+                } else {
+                    console.error('TerminalManager not available');
                 }
                 return true;
+            } else {
+                console.log('Terminal click did not intersect terminal screen');
             }
         }
         
         return false;
+    }
+    
+    setupTerminalInputHandlers() {
+        const input = document.getElementById('terminal-input');
+        if (!input) return;
+        
+        // Handle input changes - update terminal display in real-time
+        input.addEventListener('input', (event) => {
+            if (this.terminalManager && this.terminalManager.activeTerminalIndex !== null) {
+                const text = event.target.value;
+                this.terminalManager.updateTerminalWithInput(
+                    this.terminalManager.activeTerminalIndex,
+                    text
+                );
+            }
+        });
+        
+        // Handle Enter key - submit command
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (this.terminalManager && this.terminalManager.activeTerminalIndex !== null) {
+                    const command = input.value.trim();
+                    if (command !== '') {
+                        const moduleIndex = this.terminalManager.activeTerminalIndex;
+                        // Clear input but keep overlay active for next command
+                        input.value = '';
+                        // Send command via global handler
+                        if (window.onTerminalCommand) {
+                            window.onTerminalCommand(moduleIndex, command);
+                        }
+                        // Refocus input immediately so user can type next command
+                        setTimeout(() => {
+                            input.focus();
+                        }, 10);
+                        // Keep overlay active - it will be hidden automatically when module is solved
+                        // or when user presses Escape
+                    }
+                }
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                if (this.terminalManager) {
+                    this.terminalManager.hideInputOverlay();
+                }
+            }
+        });
+        
+        // Handle blur - hide overlay when input loses focus
+        // But only if the module is solved or user explicitly clicked outside
+        input.addEventListener('blur', () => {
+            // Small delay to allow refocus and click events to process first
+            setTimeout(() => {
+                if (this.terminalManager && this.terminalManager.activeTerminalIndex !== null) {
+                    const moduleIndex = this.terminalManager.activeTerminalIndex;
+                    // Check if module is solved - if so, hide overlay
+                    // Otherwise, check if input is still focused (might have been refocused)
+                    const input = document.getElementById('terminal-input');
+                    if (input && document.activeElement !== input) {
+                        // Input is not focused and not solved - user clicked away
+                        const overlay = document.getElementById('terminal-input-overlay');
+                        if (overlay && overlay.style.display !== 'none') {
+                            // Only hide if user actually clicked outside (not just temporary blur)
+                            // We'll let the solved check handle hiding when appropriate
+                        }
+                    }
+                }
+            }, 150);
+        });
     }
     
     clearHoverStates() {

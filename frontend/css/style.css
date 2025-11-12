@@ -545,3 +545,34 @@ button:active {
     font-size: 16px;
 }
 
+/* Terminal Input Overlay */
+#terminal-input-overlay {
+    position: absolute;
+    z-index: 200;
+    pointer-events: none;
+    /* Debug: uncomment to see overlay bounds */
+    /* border: 2px solid red; */
+    /* background: rgba(255, 0, 0, 0.1); */
+}
+
+#terminal-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 48px;
+    font-weight: bold;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    caret-color: #00ff00;
+    pointer-events: auto;
+    opacity: 0.01; /* Nearly transparent but still clickable - text appears on canvas */
+}
+
+#terminal-input::placeholder {
+    color: rgba(0, 255, 0, 0.5);
+}
+

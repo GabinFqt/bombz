@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -85,16 +86,93 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		moduleRules[fmt.Sprintf("buttonModule%d", i)] = moduleManual
 	}
 
-	// Create terminal modules - each generates its own rules using the random seed
+	// Create terminal modules - each randomly selects 3 of 20 rules from the comprehensive manual
+	// First, generate the comprehensive manual with 20 rules
+	comprehensiveManual := GenerateComprehensiveTerminalModuleManual(seed)
+	moduleRules["terminalModule"] = comprehensiveManual
+
+	// Parse the 20 rules from the manual to create a lookup map
+	ruleMap := make(map[string]string) // terminal text -> command
+	for _, rule := range comprehensiveManual.Rules {
+		// Parse rule description: "If terminal says \"X\", type Y."
+		// Extract terminal text and command
+		desc := rule.Description
+		if strings.Contains(desc, "If terminal says \"") {
+			start := strings.Index(desc, "\"") + 1
+			end := strings.Index(desc[start:], "\"")
+			if end > 0 {
+				terminalText := desc[start : start+end]
+				// Extract command (after "type ")
+				cmdStart := strings.Index(desc, "type ") + 5
+				cmdEnd := strings.Index(desc[cmdStart:], ".")
+				if cmdEnd > 0 {
+					command := desc[cmdStart : cmdStart+cmdEnd]
+					ruleMap[terminalText] = command
+				}
+			}
+		}
+	}
+
+	// Create terminal modules - each randomly selects 3 rules
 	terminalModules := make([]*TerminalModule, numTerminalModules)
 	for i := 0; i < numTerminalModules; i++ {
-		// Use seed + offset + moduleIndex to differentiate each module's terminal generation
-		terminalSeed := seed + int64(20000000) + int64(i)*1000000 // Different offset from wire and button modules
-		module, moduleManual := NewTerminalModuleWithRules(terminalSeed, seed)
-		terminalModules[i] = module
+		// Use seed + offset + moduleIndex for deterministic random selection per module
+		moduleRNG := rand.New(rand.NewSource(seed + int64(20000000) + int64(i)*1000000))
 
-		// Store manual with module index key (e.g., "terminalModule0", "terminalModule1")
-		moduleRules[fmt.Sprintf("terminalModule%d", i)] = moduleManual
+		// Get all terminal texts from the rule map
+		allTexts := make([]string, 0, len(ruleMap))
+		for text := range ruleMap {
+			allTexts = append(allTexts, text)
+		}
+
+		// Randomly select 3 unique terminal texts (and their corresponding commands)
+		selectedTexts := make([]string, 0, 3)
+		selectedCommands := make([]string, 0, 3)
+		usedIndices := make(map[int]bool)
+
+		for len(selectedTexts) < 3 && len(selectedTexts) < len(allTexts) {
+			idx := moduleRNG.Intn(len(allTexts))
+			if !usedIndices[idx] {
+				usedIndices[idx] = true
+				text := allTexts[idx]
+				selectedTexts = append(selectedTexts, text)
+				selectedCommands = append(selectedCommands, ruleMap[text])
+			}
+		}
+
+		// Create rule set for this module
+		rules := make([]TerminalRule, 0, 3)
+		for j := 0; j < len(selectedTexts); j++ {
+			text := selectedTexts[j]
+			cmd := selectedCommands[j]
+
+			evaluator := func(inputText string) string {
+				if strings.Contains(strings.ToUpper(inputText), strings.ToUpper(text)) {
+					return cmd
+				}
+				return ""
+			}
+
+			rules = append(rules, TerminalRule{
+				Number:      j + 1,
+				Description: fmt.Sprintf("If terminal says \"%s\", type %s.", text, cmd),
+				Evaluator:   evaluator,
+				Command:     cmd,
+			})
+		}
+
+		ruleSet := &TerminalRuleSet{Rules: rules}
+
+		module := &TerminalModule{
+			TerminalTexts:   selectedTexts,
+			CurrentStep:     0,
+			EnteredCommands: []string{},
+			CorrectCommands: selectedCommands,
+			IsSolved:        false,
+			RuleSet:         ruleSet,
+			TerminalSeed:    seed + int64(20000000) + int64(i)*1000000,
+		}
+		terminalModules[i] = module
 	}
 
 	return &Bomb{

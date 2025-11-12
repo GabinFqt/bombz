@@ -11,7 +11,7 @@ class TerminalModule {
             this.updateBombState(bombState);
         });
         
-        // Setup terminal command result handler for strikes
+        // Setup terminal command result handler for strikes and responses
         this.websocketClient.onMessage((message) => {
             if (message.type === 'terminalCommandResult') {
                 let result;
@@ -26,11 +26,35 @@ class TerminalModule {
                     result = message.data;
                 }
                 
-                if (result && result.correct === false && result.moduleIndex !== undefined) {
-                    // Show red flash for strike
-                    const actualModuleIndex = this.getActualModuleIndex(result.moduleIndex, 'terminal');
-                    if (actualModuleIndex !== -1) {
-                        this.bomb3d.showModuleStrike(actualModuleIndex);
+                if (result && result.moduleIndex !== undefined) {
+                    const terminalModuleIndex = result.moduleIndex;
+                    
+                    // Display response in terminal
+                    if (this.bomb3d && this.bomb3d.terminalManager) {
+                        this.bomb3d.terminalManager.addCommandResponse(
+                            terminalModuleIndex,
+                            result.command || '',
+                            result.correct === true
+                        );
+                    }
+                    
+                    // Show red flash for strike if incorrect
+                    if (result.correct === false) {
+                        const actualModuleIndex = this.getActualModuleIndex(terminalModuleIndex, 'terminal');
+                        if (actualModuleIndex !== -1) {
+                            this.bomb3d.showModuleStrike(actualModuleIndex);
+                        }
+                    }
+                    
+                    // Check if module is solved - if so, hide input overlay
+                    if (this.currentBombState && 
+                        this.currentBombState.terminalModules && 
+                        this.currentBombState.terminalModules[terminalModuleIndex]) {
+                        const module = this.currentBombState.terminalModules[terminalModuleIndex];
+                        if (module.isSolved && this.bomb3d && this.bomb3d.terminalManager) {
+                            // Module is solved, hide input overlay
+                            this.bomb3d.terminalManager.hideInputOverlay();
+                        }
                     }
                 }
             }
@@ -82,12 +106,17 @@ class TerminalModule {
         if (bombState.terminalModules && Array.isArray(bombState.terminalModules)) {
             this.bomb3d.updateTerminals(bombState.terminalModules);
             
-            // Show green glow for already solved modules
+            // Show green glow for already solved modules and hide input overlay if solved
             bombState.terminalModules.forEach((module, moduleIndex) => {
                 if (module && module.isSolved) {
                     const actualModuleIndex = this.getActualModuleIndex(moduleIndex, 'terminal');
                     if (actualModuleIndex !== -1) {
                         this.bomb3d.showModuleSuccess(actualModuleIndex);
+                    }
+                    // Hide input overlay if this terminal is solved and currently active
+                    if (this.bomb3d && this.bomb3d.terminalManager && 
+                        this.bomb3d.terminalManager.activeTerminalIndex === moduleIndex) {
+                        this.bomb3d.terminalManager.hideInputOverlay();
                     }
                 }
             });
