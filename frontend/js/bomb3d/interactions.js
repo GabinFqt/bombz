@@ -404,6 +404,31 @@ class InteractionManager {
                 this.hoveredWire = null;
             }
             
+            // Check if this is a terminal module and automatically show input overlay after zoom completes
+            if (this.terminalManager && this.terminalModulesState) {
+                const terminalModules = this.terminalModulesState();
+                const wireModuleCount = this.wiresModulesState ? this.wiresModulesState().length : 0;
+                const buttonModuleCount = this.buttonModulesState ? this.buttonModulesState().length : 0;
+                
+                if (moduleIndex >= wireModuleCount + buttonModuleCount) {
+                    const terminalModuleIndex = moduleIndex - wireModuleCount - buttonModuleCount;
+                    if (terminalModules && terminalModuleIndex >= 0 && terminalModuleIndex < terminalModules.length) {
+                        const terminalModule = terminalModules[terminalModuleIndex];
+                        if (terminalModule && !terminalModule.isSolved) {
+                            // Wait for zoom animation to complete (500ms) then show overlay
+                            setTimeout(() => {
+                                // Double-check we're still zoomed on this terminal
+                                if (this.zoomManager.isZoomed && 
+                                    this.zoomManager.zoomedModuleIndex === moduleIndex &&
+                                    this.terminalManager) {
+                                    this.terminalManager.showInputOverlay(terminalModuleIndex);
+                                }
+                            }, 550); // Slightly longer than zoom animation duration (500ms)
+                        }
+                    }
+                }
+            }
+            
             return true;
         }
         

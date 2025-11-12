@@ -110,57 +110,67 @@ class TerminalManager {
         context.fillStyle = '#0a0a0a';
         context.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Draw terminal text (monospace font) - larger font for visibility
+        // Setup drawing context
         context.font = 'bold 48px "Courier New", monospace';
-        context.fillStyle = '#00ff00'; // Green terminal text
         context.textAlign = 'left';
         context.textBaseline = 'top';
         
-        let yOffset = 60;
-        const lineHeight = 60;
+        // Get command responses for this module (if any)
+        const responses = this.commandResponses[moduleIndex] || [];
         
-        // Draw current terminal text
-        if (terminalText) {
-            context.fillStyle = '#00ff00';
-            const lines = terminalText.split('\n');
-            lines.forEach(line => {
-                if (line.trim()) { // Only draw non-empty lines
-                    context.fillText(line, 30, yOffset);
-                    yOffset += lineHeight;
-                }
-            });
-        } else {
-            // Fallback: show default text if terminalText is missing
-            context.fillStyle = '#00ff00';
-            context.fillText('Terminal ready.', 30, yOffset);
-            yOffset += lineHeight;
+        // Collect all lines to display
+        const allLines = this.collectTerminalLines(
+            terminalTexts,
+            terminalText,
+            responses,
+            enteredCommands,
+            currentStep,
+            isSolved,
+            null, // Not active during creation
+            null  // No input during creation
+        );
+        
+        const lineHeight = 60;
+        const topMargin = 60;
+        const bottomMargin = 60;
+        const maxLines = Math.floor((canvas.height - topMargin - bottomMargin) / lineHeight);
+        
+        // Calculate starting line index (show only the last maxLines lines)
+        let startLineIndex = 0;
+        if (allLines.length > maxLines) {
+            startLineIndex = allLines.length - maxLines;
         }
         
-            // Draw entered commands
-            if (enteredCommands && enteredCommands.length > 0) {
-                yOffset += lineHeight;
-                enteredCommands.forEach((cmd, index) => {
-                    context.fillStyle = index < currentStep ? '#00ff00' : '#888888'; // Green for completed, gray for pending
-                    context.fillText(`> ${cmd}`, 30, yOffset);
-                    yOffset += lineHeight;
-                });
+        // Draw lines starting from startLineIndex
+        let yOffset = topMargin;
+        for (let i = startLineIndex; i < allLines.length; i++) {
+            const line = allLines[i];
+            context.fillStyle = line.color;
+            
+            if (line.hasCursor) {
+                // Draw cursor line
+                if (line.text) {
+                    context.fillText(line.text, 30, yOffset);
+                    const textMetrics = context.measureText(line.text);
+                    const textWidth = textMetrics.width;
+                    // Position cursor at bottom of text
+                    // With textBaseline='top', yOffset is at top of text
+                    // Get actual text height from metrics
+                    const textHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+                    const cursorY = yOffset + textHeight - 2; // Position cursor at bottom of text
+                    context.fillRect(30 + textWidth, cursorY, 30, 4);
+                } else {
+                    // Cursor only - use font size as fallback
+                    const fontHeight = 48; // Font size is 48px
+                    const cursorY = yOffset + fontHeight - 2;
+                    context.fillRect(30, cursorY, 30, 4);
+                }
+            } else if (line.text) {
+                context.fillText(line.text, 30, yOffset);
             }
             
-            // Draw current prompt
-            if (!isSolved) {
-                yOffset += lineHeight;
-                context.fillStyle = '#00ff00';
-                const prompt = `Command ${currentStep + 1}/3:`;
-                context.fillText(prompt, 30, yOffset);
-                yOffset += lineHeight;
-                // Draw cursor
-                context.fillStyle = '#00ff00';
-                context.fillRect(30, yOffset - 5, 30, 4);
-            } else {
-                yOffset += lineHeight;
-                context.fillStyle = '#00ff00';
-                context.fillText('All commands executed successfully.', 30, yOffset);
-            }
+            yOffset += lineHeight;
+        }
         
         // Create texture from canvas
         const texture = new THREE.CanvasTexture(canvas);
@@ -281,12 +291,21 @@ class TerminalManager {
             overlay.style.width = position.width + 'px';
             overlay.style.height = position.height + 'px';
             
-            // Clear and focus input
+            // Clear input
             input.value = '';
-            input.focus();
             
             // Update terminal canvas to show input prompt
             this.updateTerminalWithInput(moduleIndex, '');
+            
+            // Focus input with a small delay to ensure overlay is fully displayed
+            // Use both setTimeout and requestAnimationFrame for better compatibility
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    input.focus();
+                    // Select any existing text if needed
+                    input.select();
+                }, 50);
+            });
             
             console.log('Terminal input overlay shown at:', position);
         }
@@ -321,6 +340,97 @@ class TerminalManager {
             
             this.activeTerminalIndex = null;
             this.currentInputText = '';
+        }
+        
+        // Helper function to collect all lines to display
+        collectTerminalLines(terminalTexts, terminalText, responses, enteredCommands, currentStep, isSolved, activeTerminalIndex, currentInputText) {
+            const lines = [];
+            const lineHeight = 60;
+            
+            // Always use initial terminal text (terminalTexts[0]) at the top
+            let initialTerminalText = "Terminal ready.";
+            if (terminalTexts && Array.isArray(terminalTexts) && terminalTexts.length > 0) {
+                initialTerminalText = terminalTexts[0];
+            } else if (terminalText) {
+                initialTerminalText = terminalText;
+            }
+            
+            // Add initial terminal text lines
+            if (initialTerminalText) {
+                const textLines = initialTerminalText.split('\n');
+                textLines.forEach(line => {
+                    if (line.trim()) {
+                        lines.push({ text: line, color: '#00ff00' });
+                    }
+                });
+            } else {
+                lines.push({ text: 'Terminal ready.', color: '#00ff00' });
+            }
+            
+            // Add command responses and intermediate terminal texts
+            if (responses.length > 0 || (enteredCommands && enteredCommands.length > 0)) {
+                lines.push({ text: '', color: '#00ff00' }); // Empty line separator
+                
+                const numCommands = Math.max(responses.length, enteredCommands.length);
+                for (let i = 0; i < numCommands; i++) {
+                    if (i < responses.length) {
+                        const response = responses[i];
+                        const responseLines = response.text.split('\n');
+                        responseLines.forEach(line => {
+                            if (line.trim()) {
+                                lines.push({ text: line, color: response.correct ? '#00ff00' : '#ff6b6b' });
+                            }
+                        });
+                        
+                        if (response.correct) {
+                            // If command was correct, add the next terminal text
+                            if (terminalTexts && Array.isArray(terminalTexts) && i + 1 < terminalTexts.length) {
+                                lines.push({ text: '', color: '#00ff00' }); // Empty line separator
+                                const nextTerminalText = terminalTexts[i + 1];
+                                const textLines = nextTerminalText.split('\n');
+                                textLines.forEach(line => {
+                                    if (line.trim()) {
+                                        lines.push({ text: line, color: '#00ff00' });
+                                    }
+                                });
+                            }
+                        } else {
+                            // If command was incorrect, re-display the current terminal text
+                            if (terminalTexts && Array.isArray(terminalTexts) && currentStep < terminalTexts.length) {
+                                lines.push({ text: '', color: '#00ff00' }); // Empty line separator
+                                const currentTerminalText = terminalTexts[currentStep];
+                                const textLines = currentTerminalText.split('\n');
+                                textLines.forEach(line => {
+                                    if (line.trim()) {
+                                        lines.push({ text: line, color: '#00ff00' });
+                                    }
+                                });
+                            }
+                        }
+                    } else if (i < enteredCommands.length) {
+                        const cmd = enteredCommands[i];
+                        lines.push({ text: `> ${cmd}`, color: i < currentStep ? '#00ff00' : '#888888' });
+                    }
+                }
+            }
+            
+            // Add current prompt and input
+            if (!isSolved) {
+                lines.push({ text: '', color: '#00ff00' }); // Empty line separator
+                lines.push({ text: `Command ${currentStep + 1}/3:`, color: '#00ff00' });
+                
+                // Add current input text if active
+                if (activeTerminalIndex !== null && currentInputText !== null && currentInputText !== undefined) {
+                    lines.push({ text: `> ${currentInputText}`, color: '#00ff00', hasCursor: true });
+                } else {
+                    lines.push({ text: '', color: '#00ff00', hasCursor: true }); // Cursor only
+                }
+            } else {
+                lines.push({ text: '', color: '#00ff00' }); // Empty line separator
+                lines.push({ text: 'All commands executed successfully.', color: '#00ff00' });
+            }
+            
+            return lines;
         }
         
         // Update terminal canvas with current input text
@@ -358,95 +468,66 @@ class TerminalManager {
             const isSolved = terminalGroup.userData.isSolved;
             const responses = this.commandResponses[moduleIndex] || [];
             
-            // Get current terminal text based on step
-            let currentTerminalText = "Terminal ready.";
-            if (terminalTexts && Array.isArray(terminalTexts) && terminalTexts.length > 0) {
-                const step = currentStep || 0;
-                currentTerminalText = terminalTexts[step] || terminalTexts[terminalTexts.length - 1];
-            } else if (terminalText) {
-                currentTerminalText = terminalText;
-            }
+            // Collect all lines to display
+            const allLines = this.collectTerminalLines(
+                terminalTexts,
+                terminalText,
+                responses,
+                enteredCommands,
+                currentStep,
+                isSolved,
+                this.activeTerminalIndex === moduleIndex ? moduleIndex : null,
+                this.activeTerminalIndex === moduleIndex ? this.currentInputText : null
+            );
             
             // Clear canvas
             context.fillStyle = '#0a0a0a';
             context.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Redraw terminal content
+            // Setup drawing context
             context.font = 'bold 48px "Courier New", monospace';
-            context.fillStyle = '#00ff00';
             context.textAlign = 'left';
             context.textBaseline = 'top';
             
-            let yOffset = 60;
             const lineHeight = 60;
+            const topMargin = 60;
+            const bottomMargin = 60;
+            const maxLines = Math.floor((canvas.height - topMargin - bottomMargin) / lineHeight);
             
-            // Draw current terminal text
-            if (currentTerminalText) {
-                context.fillStyle = '#00ff00';
-                const lines = currentTerminalText.split('\n');
-                lines.forEach(line => {
-                    if (line.trim()) {
-                        context.fillText(line, 30, yOffset);
-                        yOffset += lineHeight;
-                    }
-                });
-            } else {
-                context.fillStyle = '#00ff00';
-                context.fillText('Terminal ready.', 30, yOffset);
-                yOffset += lineHeight;
+            // Calculate starting line index (show only the last maxLines lines)
+            let startLineIndex = 0;
+            if (allLines.length > maxLines) {
+                startLineIndex = allLines.length - maxLines;
             }
             
-            // Draw command responses
-            if (responses.length > 0) {
-                yOffset += lineHeight;
-                responses.forEach(response => {
-                    context.fillStyle = response.correct ? '#00ff00' : '#ff6b6b';
-                    const lines = response.text.split('\n');
-                    lines.forEach(line => {
-                        if (line.trim()) {
-                            context.fillText(line, 30, yOffset);
-                            yOffset += lineHeight;
-                        }
-                    });
-                });
-            }
-            
-            // Draw entered commands
-            if (enteredCommands && enteredCommands.length > 0) {
-                yOffset += lineHeight;
-                enteredCommands.forEach((cmd, index) => {
-                    context.fillStyle = index < currentStep ? '#00ff00' : '#888888';
-                    context.fillText(`> ${cmd}`, 30, yOffset);
-                    yOffset += lineHeight;
-                });
-            }
-            
-            // Draw current prompt and input
-            if (!isSolved) {
-                yOffset += lineHeight;
-                context.fillStyle = '#00ff00';
-                const prompt = `Command ${currentStep + 1}/3:`;
-                context.fillText(prompt, 30, yOffset);
-                yOffset += lineHeight;
+            // Draw lines starting from startLineIndex
+            let yOffset = topMargin;
+            for (let i = startLineIndex; i < allLines.length; i++) {
+                const line = allLines[i];
+                context.fillStyle = line.color;
                 
-                // Draw current input text if active
-                if (this.activeTerminalIndex === moduleIndex && this.currentInputText !== null) {
-                    context.fillStyle = '#00ff00';
-                    context.fillText(`> ${this.currentInputText}`, 30, yOffset);
-                    yOffset += lineHeight;
-                    // Draw cursor
-                    const textWidth = context.measureText(`> ${this.currentInputText}`).width;
-                    context.fillStyle = '#00ff00';
-                    context.fillRect(30 + textWidth, yOffset - 5, 30, 4);
-                } else {
-                    // Draw cursor
-                    context.fillStyle = '#00ff00';
-                    context.fillRect(30, yOffset - 5, 30, 4);
+                if (line.hasCursor) {
+                    // Draw cursor line
+                    if (line.text) {
+                        context.fillText(line.text, 30, yOffset);
+                        const textMetrics = context.measureText(line.text);
+                        const textWidth = textMetrics.width;
+                        // Position cursor at bottom of text, aligned with text baseline
+                        // With textBaseline='top', yOffset is at top, so add font height
+                        const fontHeight = 48; // Font size is 48px
+                        const cursorY = yOffset + fontHeight - 4; // Position cursor near bottom of text
+                        context.fillRect(30 + textWidth, cursorY, 30, 4);
+                    } else {
+                        // Cursor only
+                        const fontHeight = 48; // Font size is 48px
+                        const cursorY = yOffset + fontHeight - 4;
+                        context.fillRect(30, cursorY, 30, 4);
+                    }
+                } else if (line.text) {
+                    context.fillText(line.text, 30, yOffset);
                 }
-            } else {
+                
                 yOffset += lineHeight;
-                context.fillStyle = '#00ff00';
-                context.fillText('All commands executed successfully.', 30, yOffset);
             }
             
             // Update texture
