@@ -162,11 +162,19 @@
         <div id="menu" class="overlay">
             <div class="menu-content">
                 <h1>Bombz</h1>
-                <div id="menu-buttons">
-                    <button id="create-game-btn">Create Game</button>
-                    <div id="join-form" style="margin-top: 20px;">
-                        <input type="text" id="session-id-input" placeholder="Enter Session ID to join">
-                        <button id="join-submit-btn" style="margin-top: 10px;">Join Game</button>
+                <div id="menu-cards">
+                    <div class="menu-card">
+                        <h2>Create Game</h2>
+                        <p>Start a new game session</p>
+                        <button id="create-game-btn">Create Game</button>
+                    </div>
+                    <div class="menu-card">
+                        <h2>Join Game</h2>
+                        <p>Enter a session ID to join</p>
+                        <div id="join-form">
+                            <input type="text" id="session-id-input" placeholder="Enter Session ID">
+                            <button id="join-submit-btn">Join Game</button>
+                        </div>
                     </div>
                 </div>
             </div>
