@@ -56,13 +56,23 @@ class InteractionManager {
             this.lastMouseX = event.clientX;
             this.lastMouseY = event.clientY;
             
-            // Module hover detection (only when not zoomed)
+            // Module hover detection (when not zoomed, or when zoomed but current module is solved)
             if (!this.zoomManager.isZoomed) {
                 this.handleModuleHover();
             } else {
-                // Wire/button hover detection (only when zoomed)
-                this.handleWireHover();
-                this.handleButtonHover();
+                // Check if current module is solved - if so, allow module hover
+                const currentModuleSolved = this.zoomManager.zoomedModuleIndex !== null 
+                    ? this.isModuleSolved(this.zoomManager.zoomedModuleIndex) 
+                    : false;
+                
+                if (currentModuleSolved) {
+                    // Current module is solved, allow hovering over other modules
+                    this.handleModuleHover();
+                } else {
+                    // Current module not solved, only show wire/button hover
+                    this.handleWireHover();
+                    this.handleButtonHover();
+                }
             }
         });
         
@@ -119,11 +129,75 @@ class InteractionManager {
                     });
                 }
                 
-                // Add module panels
+                // Check if click hits a different module panel
+                // Allow switching if current module is solved, otherwise prevent switching
                 if (this.modulePanels) {
-                    this.modulePanels.forEach(mp => {
-                        clickableObjects.push(mp.panel);
-                    });
+                    const moduleObjects = this.modulePanels.map(mp => mp.panel);
+                    const moduleIntersects = this.raycaster.intersectObjects(moduleObjects, true);
+                    
+                    if (moduleIntersects.length > 0) {
+                        const clickedModuleIndex = moduleIntersects[0].object.userData.moduleIndex;
+                        // If clicking on a different module panel
+                        if (clickedModuleIndex !== this.zoomManager.zoomedModuleIndex) {
+                            // Check if current module is solved - if so, allow switching
+                            const currentModuleSolved = this.isModuleSolved(this.zoomManager.zoomedModuleIndex);
+                            if (!currentModuleSolved) {
+                                return; // Ignore clicks on other modules when current module is not solved
+                            }
+                            // Current module is solved, allow switching to clicked module
+                            // Hide terminal input overlay if active
+                            if (this.terminalManager) {
+                                this.terminalManager.hideInputOverlay();
+                            }
+                            // Remove hover state
+                            if (this.hoveredModuleIndex !== null) {
+                                this.visualFeedbackManager.setModuleHover(this.hoveredModuleIndex, false);
+                                this.hoveredModuleIndex = null;
+                            }
+                            // Zoom to the clicked module
+                            this.zoomManager.zoomToModule(clickedModuleIndex);
+                            
+                            // Check if this is a terminal module and automatically show input overlay after zoom completes
+                            if (this.terminalManager && this.terminalModulesState) {
+                                const terminalModules = typeof this.terminalModulesState === 'function' 
+                                    ? this.terminalModulesState() 
+                                    : this.terminalModulesState;
+                                const wireModuleCount = typeof this.wiresModulesState === 'function' 
+                                    ? (this.wiresModulesState() ? this.wiresModulesState().length : 0)
+                                    : (this.wiresModulesState ? this.wiresModulesState.length : 0);
+                                const buttonModuleCount = typeof this.buttonModulesState === 'function' 
+                                    ? (this.buttonModulesState() ? this.buttonModulesState().length : 0)
+                                    : (this.buttonModulesState ? this.buttonModulesState.length : 0);
+                                
+                                if (clickedModuleIndex >= wireModuleCount + buttonModuleCount) {
+                                    const terminalModuleIndex = clickedModuleIndex - wireModuleCount - buttonModuleCount;
+                                    if (terminalModules && terminalModuleIndex >= 0 && terminalModuleIndex < terminalModules.length) {
+                                        const terminalModule = terminalModules[terminalModuleIndex];
+                                        if (terminalModule && !terminalModule.isSolved) {
+                                            // Wait for zoom animation to complete (500ms) then show overlay
+                                            setTimeout(() => {
+                                                // Double-check we're still zoomed on this terminal
+                                                if (this.zoomManager.isZoomed && 
+                                                    this.zoomManager.zoomedModuleIndex === clickedModuleIndex &&
+                                                    this.terminalManager) {
+                                                    this.terminalManager.showInputOverlay(terminalModuleIndex);
+                                                }
+                                            }, 550); // Slightly longer than zoom animation duration (500ms)
+                                        }
+                                    }
+                                }
+                            }
+                            return; // Handled module switch
+                        }
+                    }
+                }
+                
+                // Add module panels for the zoomed module only (for other click detection)
+                if (this.modulePanels && this.zoomManager.zoomedModuleIndex !== null) {
+                    const zoomedPanel = this.modulePanels[this.zoomManager.zoomedModuleIndex];
+                    if (zoomedPanel) {
+                        clickableObjects.push(zoomedPanel.panel);
+                    }
                 }
                 
                 // Check if click hits any object
@@ -240,6 +314,49 @@ class InteractionManager {
         this.container.style.cursor = 'grab';
     }
     
+    isModuleSolved(moduleIndex) {
+        // Get module counts
+        const wireModuleCount = typeof this.wiresModulesState === 'function' 
+            ? (this.wiresModulesState() ? this.wiresModulesState().length : 0)
+            : (this.wiresModulesState ? this.wiresModulesState.length : 0);
+        const buttonModuleCount = typeof this.buttonModulesState === 'function' 
+            ? (this.buttonModulesState() ? this.buttonModulesState().length : 0)
+            : (this.buttonModulesState ? this.buttonModulesState.length : 0);
+        
+        // Check wire modules
+        if (moduleIndex < wireModuleCount) {
+            const wiresModules = typeof this.wiresModulesState === 'function' 
+                ? this.wiresModulesState() 
+                : this.wiresModulesState;
+            if (wiresModules && wiresModules[moduleIndex]) {
+                return wiresModules[moduleIndex].isSolved || false;
+            }
+            return false;
+        }
+        
+        // Check button modules
+        if (moduleIndex < wireModuleCount + buttonModuleCount) {
+            const buttonModuleIndex = moduleIndex - wireModuleCount;
+            const buttonModules = typeof this.buttonModulesState === 'function' 
+                ? this.buttonModulesState() 
+                : this.buttonModulesState;
+            if (buttonModules && buttonModules[buttonModuleIndex]) {
+                return buttonModules[buttonModuleIndex].isSolved || false;
+            }
+            return false;
+        }
+        
+        // Check terminal modules
+        const terminalModuleIndex = moduleIndex - wireModuleCount - buttonModuleCount;
+        const terminalModules = typeof this.terminalModulesState === 'function' 
+            ? this.terminalModulesState() 
+            : this.terminalModulesState;
+        if (terminalModules && terminalModules[terminalModuleIndex]) {
+            return terminalModules[terminalModuleIndex].isSolved || false;
+        }
+        return false;
+    }
+    
     handleModuleHover() {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         
@@ -249,6 +366,18 @@ class InteractionManager {
         
         if (intersects.length > 0) {
             const moduleIndex = intersects[0].object.userData.moduleIndex;
+            
+            // If zoomed, only show hover on modules different from the current zoomed module
+            if (this.zoomManager.isZoomed && moduleIndex === this.zoomManager.zoomedModuleIndex) {
+                // Hovering over the current zoomed module - remove hover if any
+                if (this.hoveredModuleIndex !== null) {
+                    this.visualFeedbackManager.setModuleHover(this.hoveredModuleIndex, false);
+                    this.hoveredModuleIndex = null;
+                    this.container.style.cursor = 'default';
+                }
+                return;
+            }
+            
             if (moduleIndex !== this.hoveredModuleIndex) {
                 // Remove previous hover
                 if (this.hoveredModuleIndex !== null) {
@@ -264,7 +393,7 @@ class InteractionManager {
             if (this.hoveredModuleIndex !== null) {
                 this.visualFeedbackManager.setModuleHover(this.hoveredModuleIndex, false);
                 this.hoveredModuleIndex = null;
-                this.container.style.cursor = 'grab';
+                this.container.style.cursor = this.zoomManager.isZoomed ? 'default' : 'grab';
             }
         }
     }
