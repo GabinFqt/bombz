@@ -108,6 +108,12 @@ class WebSocketClient {
                     this.onMessageCallbacks.forEach(callback => callback(message));
                 }
                 break;
+            case 'terminalCommandResult':
+                const terminalResult = this.parseMessageData(message.data, 'terminalCommandResult');
+                if (terminalResult !== null) {
+                    this.onMessageCallbacks.forEach(callback => callback(message));
+                }
+                break;
             case 'pong':
                 // Heartbeat response
                 break;
@@ -179,6 +185,17 @@ class WebSocketClient {
             sessionId: this.sessionId,
             data: {
                 moduleIndex: moduleIndex,
+            },
+        });
+    }
+    
+    enterTerminalCommand(moduleIndex, command) {
+        this.send({
+            type: 'terminalCommand',
+            sessionId: this.sessionId,
+            data: {
+                moduleIndex: moduleIndex,
+                command: command,
             },
         });
     }

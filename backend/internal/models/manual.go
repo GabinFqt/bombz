@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 )
 
 // getOrdinalSuffix returns the ordinal suffix for a number (st, nd, rd, th)
@@ -739,6 +740,156 @@ func GetWireModuleManual() *WireModuleManual {
 	return GenerateComprehensiveWireModuleManual(12345)
 }
 
+// GenerateTerminalModuleRulesWithSeed generates random rules for terminal modules with a specific seed for determinism
+// Rules are based on terminal text displayed at each step
+func GenerateTerminalModuleRulesWithSeed(seed int64, terminalTexts []string) (*TerminalRuleSet, *ModuleManual) {
+	// Create a new random source with the given seed
+	rng := rand.New(rand.NewSource(seed))
+
+	// Command words pool - these are the words players need to type
+	commandWords := []string{
+		"RED", "BLUE", "GREEN", "WHITE", "YELLOW",
+		"ABORT", "DETONATE", "HOLD", "PRESS", "OTHER",
+		"FIRST", "SECOND", "THIRD", "LAST",
+		"ENTER", "EXECUTE", "RUN", "START", "STOP",
+		"YES", "NO", "ACCEPT", "DENY", "CONFIRM",
+	}
+
+	// Generate 3 rules (one for each command step)
+	rules := make([]TerminalRule, 0, 3)
+	manualRules := make([]ManualRule, 0, 3)
+
+	// Track used command words to avoid duplicates
+	usedCommands := make(map[string]bool)
+
+	// Generate rules based on terminal texts
+	for i := 0; i < 3 && i < len(terminalTexts); i++ {
+		terminalText := terminalTexts[i]
+
+		// Pick a random command word (avoid duplicates)
+		var commandWord string
+		var attempts int
+		for {
+			commandWord = commandWords[rng.Intn(len(commandWords))]
+			if !usedCommands[commandWord] {
+				usedCommands[commandWord] = true
+				break
+			}
+			attempts++
+			if attempts > 100 {
+				// Fallback: use a numbered command if we run out
+				commandWord = fmt.Sprintf("CMD%d", i+1)
+				break
+			}
+		}
+
+		// Create rule based on terminal text
+		// The rule checks what text is displayed and tells what command to type
+		description := fmt.Sprintf("If terminal says \"%s\", type %s.", terminalText, commandWord)
+
+		evaluator := func(text string) string {
+			// Check if the terminal text matches
+			if strings.Contains(strings.ToUpper(text), strings.ToUpper(terminalText)) {
+				return commandWord
+			}
+			// If text doesn't match, return empty (shouldn't happen if rule is correct)
+			return ""
+		}
+
+		rules = append(rules, TerminalRule{
+			Number:      i + 1,
+			Description: description,
+			Evaluator:   evaluator,
+			Command:     commandWord,
+		})
+
+		manualRules = append(manualRules, ManualRule{
+			Number:      i + 1,
+			Description: description,
+		})
+	}
+
+	// Create ModuleManual
+	moduleManual := &ModuleManual{
+		Title:        "Bombz Manual - Terminal Module",
+		Rules:        manualRules,
+		Instructions: "As an expert, your job is to guide the defuser through the terminal module. Look at what text is displayed in the terminal and tell the defuser which command to type based on these rules. The defuser must type 3 commands in order. After each correct command, the terminal will display new text.",
+		ModuleData: map[string]interface{}{
+			"commandWords": commandWords,
+		},
+	}
+
+	return &TerminalRuleSet{Rules: rules}, moduleManual
+}
+
+// GenerateComprehensiveTerminalModuleManual generates a comprehensive manual for terminal modules
+// This generates rules for all possible terminal text combinations
+func GenerateComprehensiveTerminalModuleManual(seed int64) *ModuleManual {
+	// We need to generate rules for all possible terminal text combinations
+	// Since terminal texts are randomly selected per module, we'll generate a comprehensive manual
+	// that covers all possible texts
+
+	// Import terminal text templates from terminal.go (we'll reference them)
+	// For now, generate rules for common patterns
+
+	// Create a comprehensive manual that lists rules for common terminal texts
+	allTerminalTexts := []string{
+		"System initialized. Enter commands:",
+		"Terminal ready. Awaiting input:",
+		"Command prompt active. Type commands:",
+		"System online. Enter commands:",
+		"Terminal interface loaded. Commands:",
+		"Access granted. Enter command:",
+		"System boot complete. Commands:",
+		"Interface active. Type command:",
+		"Command accepted. Next:",
+		"Processing... Next command:",
+		"Executed. Enter next:",
+		"Success. Continue:",
+		"Accepted. Next input:",
+		"Done. Type next command:",
+		"Complete. Next:",
+		"Command accepted. Final:",
+		"Processing... Final command:",
+		"Executed. Last input:",
+		"Success. Final command:",
+		"Accepted. Last:",
+		"Done. Type final command:",
+		"Complete. Final:",
+	}
+
+	// Generate rules for all possible texts (this will be a large manual)
+	// But for now, we'll use a seed-based approach that generates rules dynamically
+	// The actual rules will be generated per module based on the terminal texts
+
+	// For comprehensive manual, we'll create a template that shows the pattern
+	manualRules := []ManualRule{
+		{
+			Number:      1,
+			Description: "Look at the text displayed in the terminal. Match it with the rules below to determine the first command.",
+		},
+		{
+			Number:      2,
+			Description: "After typing the first command, the terminal will show new text. Match it with the rules below for the second command.",
+		},
+		{
+			Number:      3,
+			Description: "After typing the second command, the terminal will show new text. Match it with the rules below for the final command.",
+		},
+	}
+
+	moduleManual := &ModuleManual{
+		Title:        "Bombz Manual - Terminal Module",
+		Rules:        manualRules,
+		Instructions: "As an expert, your job is to guide the defuser through the terminal module. Look at what text is displayed in the terminal and tell the defuser which command to type based on the rules provided for each terminal module. The defuser must type 3 commands in order. After each correct command, the terminal will display new text.",
+		ModuleData: map[string]interface{}{
+			"allTerminalTexts": allTerminalTexts,
+		},
+	}
+
+	return moduleManual
+}
+
 // ManualContent represents the complete manual content for a game session
 type ManualContent struct {
 	WireModule *WireModuleManual        `json:"wireModule,omitempty"` // For backward compatibility
@@ -782,6 +933,22 @@ func GetManualContent(bomb *Bomb) *ManualContent {
 		// Generate one comprehensive manual for all button modules (they all use the same rules)
 		buttonManual := GenerateComprehensiveButtonModuleManual(seed)
 		content.Modules["buttonModule"] = buttonManual
+	}
+
+	// Add terminal module manuals if bomb has terminal modules
+	// Each terminal module has its own manual based on its terminal texts
+	if bomb != nil && len(bomb.TerminalModules) > 0 {
+		// Add comprehensive manual as general reference
+		terminalManual := GenerateComprehensiveTerminalModuleManual(seed)
+		content.Modules["terminalModule"] = terminalManual
+
+		// Also add specific manuals for each terminal module from ModuleRules
+		for i := 0; i < len(bomb.TerminalModules); i++ {
+			moduleKey := fmt.Sprintf("terminalModule%d", i)
+			if manual, exists := bomb.ModuleRules[moduleKey]; exists {
+				content.Modules[moduleKey] = manual
+			}
+		}
 	}
 
 	return content

@@ -1,6 +1,6 @@
 // Mouse/touch event handlers, hover detection, click handling
 class InteractionManager {
-    constructor(container, scene, camera, bombGroup, modulePanels, wires, wiresModulesState, zoomManager, animationManager, visualFeedbackManager, wiresManager, buttonManager, buttonModulesState) {
+    constructor(container, scene, camera, bombGroup, modulePanels, wires, wiresModulesState, zoomManager, animationManager, visualFeedbackManager, wiresManager, buttonManager, buttonModulesState, terminalManager, terminalModulesState) {
         this.container = container;
         this.scene = scene;
         this.camera = camera;
@@ -14,6 +14,8 @@ class InteractionManager {
         this.wiresManager = wiresManager;
         this.buttonManager = buttonManager;
         this.buttonModulesState = buttonModulesState;
+        this.terminalManager = terminalManager;
+        this.terminalModulesState = terminalModulesState;
         
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -134,8 +136,8 @@ class InteractionManager {
                     return;
                 }
                 
-                // Handle wire/button clicks in zoom mode
-                if (!this.handleButtonClick(event)) {
+                // Handle wire/button/terminal clicks in zoom mode
+                if (!this.handleButtonClick(event) && !this.handleTerminalClick(event)) {
                     this.handleClick(event);
                 }
             } else {
@@ -143,8 +145,8 @@ class InteractionManager {
                 if (this.handleModuleClick(event)) {
                     return; // Module was clicked, don't check wires/buttons
                 }
-                // Otherwise check for wire/button clicks
-                if (!this.handleButtonClick(event)) {
+                // Otherwise check for wire/button/terminal clicks
+                if (!this.handleButtonClick(event) && !this.handleTerminalClick(event)) {
                     this.handleClick(event);
                 }
             }
@@ -626,6 +628,59 @@ class InteractionManager {
         }
         
         this.pressedButton = null;
+    }
+    
+    handleTerminalClick(event) {
+        if (!this.zoomManager.isZoomed || !this.terminalManager || !this.terminalModulesState) {
+            return false;
+        }
+        
+        const terminalModules = this.terminalModulesState();
+        if (!terminalModules || terminalModules.length === 0) {
+            return false;
+        }
+        
+        // Calculate which terminal module we're looking at
+        const zoomedModuleIndex = this.zoomManager.zoomedModuleIndex;
+        const wireModuleCount = this.wiresModulesState ? this.wiresModulesState().length : 0;
+        const buttonModuleCount = this.buttonModulesState ? this.buttonModulesState().length : 0;
+        
+        // Check if zoomed module is a terminal module
+        if (zoomedModuleIndex < wireModuleCount + buttonModuleCount) {
+            return false; // Not a terminal module
+        }
+        
+        const terminalModuleIndex = zoomedModuleIndex - wireModuleCount - buttonModuleCount;
+        if (terminalModuleIndex < 0 || terminalModuleIndex >= terminalModules.length) {
+            return false;
+        }
+        
+        const terminalModule = terminalModules[terminalModuleIndex];
+        if (!terminalModule || terminalModule.isSolved) {
+            return false;
+        }
+        
+        // Check if click hits the terminal screen
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const terminals = this.terminalManager.terminals || [];
+        if (terminals[terminalModuleIndex]) {
+            const terminalGroup = terminals[terminalModuleIndex];
+            const intersects = this.raycaster.intersectObject(terminalGroup, true);
+            
+            if (intersects.length > 0) {
+                // Show prompt for command input
+                const command = prompt(`Enter command ${terminalModule.currentStep + 1}/3:`);
+                if (command !== null && command.trim() !== '') {
+                    // Send command via global handler
+                    if (window.onTerminalCommand) {
+                        window.onTerminalCommand(terminalModuleIndex, command.trim());
+                    }
+                }
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     clearHoverStates() {

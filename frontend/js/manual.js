@@ -23,6 +23,23 @@ class ManualDisplay {
         if (manualContent.modules && manualContent.modules['buttonModule']) {
             this.renderButtonModuleManual(manualContent.modules['buttonModule'], 'Button Module');
         }
+        
+        // Render terminal module manuals from modules map
+        // First render the general terminal module manual
+        if (manualContent.modules && manualContent.modules['terminalModule']) {
+            this.renderTerminalModuleManual(manualContent.modules['terminalModule'], 'Terminal Module');
+        }
+        
+        // Then render specific manuals for each terminal module
+        if (manualContent.modules) {
+            Object.keys(manualContent.modules).forEach(key => {
+                if (key.startsWith('terminalModule') && key !== 'terminalModule') {
+                    // This is a specific terminal module (e.g., terminalModule0, terminalModule1)
+                    const moduleIndex = key.replace('terminalModule', '');
+                    this.renderTerminalModuleManual(manualContent.modules[key], `Terminal Module ${parseInt(moduleIndex) + 1}`);
+                }
+            });
+        }
 
     }
 
@@ -184,6 +201,72 @@ class ManualDisplay {
         const container = document.getElementById('manual-container');
         if (container) {
             container.style.display = 'none';
+        }
+    }
+    
+    // Render terminal module manual rules
+    renderTerminalModuleManual(terminalModule, moduleTitle) {
+        // Create or find container for terminal modules
+        let terminalSection = document.getElementById('manual-terminal-section');
+        if (!terminalSection) {
+            terminalSection = document.createElement('div');
+            terminalSection.id = 'manual-terminal-section';
+            const manualContent = document.getElementById('manual-content');
+            if (manualContent) {
+                // Insert after button section
+                const buttonSection = document.getElementById('manual-buttons-section');
+                if (buttonSection && buttonSection.nextSibling) {
+                    manualContent.insertBefore(terminalSection, buttonSection.nextSibling);
+                } else {
+                    manualContent.appendChild(terminalSection);
+                }
+            }
+        }
+        
+        // Clear existing content
+        terminalSection.innerHTML = '';
+        
+        // Add title
+        const titleElement = document.createElement('h2');
+        titleElement.textContent = moduleTitle || 'Terminal Module Rules';
+        terminalSection.appendChild(titleElement);
+        
+        const rulesContainer = document.createElement('div');
+        rulesContainer.className = 'terminal-rules';
+        
+        // Render rules
+        if (terminalModule.rules && Array.isArray(terminalModule.rules)) {
+            terminalModule.rules.forEach(rule => {
+                if (!rule.description || rule.description.trim() === '') {
+                    return; // Skip empty rules
+                }
+                
+                const ruleDiv = document.createElement('div');
+                ruleDiv.className = 'rule';
+                ruleDiv.innerHTML = `<span class="rule-number">Rule ${rule.number}:</span> ${rule.description}`;
+                rulesContainer.appendChild(ruleDiv);
+            });
+        }
+        
+        terminalSection.appendChild(rulesContainer);
+        
+        // Render instructions if available
+        if (terminalModule.instructions) {
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'terminal-instructions';
+            instructionsDiv.style.marginTop = '15px';
+            instructionsDiv.textContent = terminalModule.instructions;
+            terminalSection.appendChild(instructionsDiv);
+        }
+        
+        // Render command words if available
+        if (terminalModule.moduleData && terminalModule.moduleData.commandWords) {
+            const commandWordsDiv = document.createElement('div');
+            commandWordsDiv.className = 'terminal-command-words';
+            commandWordsDiv.style.marginTop = '15px';
+            commandWordsDiv.style.fontWeight = 'bold';
+            commandWordsDiv.textContent = 'Available command words: ' + terminalModule.moduleData.commandWords.join(', ');
+            terminalSection.appendChild(commandWordsDiv);
         }
     }
 }

@@ -3,6 +3,7 @@ let bomb3d = null;
 let websocketClient = null;
 let wiresModule = null;
 let buttonModule = null;
+let terminalModule = null;
 let currentSessionId = null;
 let currentPlayerId = null;
 let currentHostId = null;
@@ -477,6 +478,9 @@ function transitionToGame() {
     // Initialize button module
     buttonModule = new ButtonModule(bomb3d, websocketClient);
     
+    // Initialize terminal module
+    terminalModule = new TerminalModule(bomb3d, websocketClient);
+    
     // Listen for game state updates to detect game end
     websocketClient.onStateUpdate((bombState) => {
         if (bombState.state === 'defused' || bombState.state === 'exploded') {
@@ -494,6 +498,9 @@ function transitionToGame() {
         wiresModule.updateBombState(bombState);
         if (buttonModule) {
             buttonModule.updateBombState(bombState);
+        }
+        if (terminalModule) {
+            terminalModule.updateBombState(bombState);
         }
         // Check if game is already ended
         if (bombState.state === 'defused' || bombState.state === 'exploded') {

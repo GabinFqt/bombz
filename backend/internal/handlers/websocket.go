@@ -335,6 +335,41 @@ func (h *WebSocketHandler) handleMessage(conn *websocket.Conn, session *models.G
 			}
 		}
 		
+	case "terminalCommand":
+		// Only allow entering terminal commands if game is active
+		if session.GetLobbyState() != models.LobbyStateActive || session.Bomb == nil {
+			return
+		}
+		
+		var data struct {
+			ModuleIndex int    `json:"moduleIndex"`
+			Command     string `json:"command"`
+		}
+		if err := json.Unmarshal(msg.Data, &data); err != nil {
+			return
+		}
+		
+		correct := session.Bomb.EnterTerminalCommand(data.ModuleIndex, data.Command)
+		
+		// Broadcast updated state to all players
+		h.broadcastGameState(session)
+		
+		// Send response to the player who entered the command via their connection channel
+		player, exists := session.GetPlayer(playerID)
+		if exists && player.Conn != nil {
+			response := WebSocketMessage{
+				Type:     "terminalCommandResult",
+				PlayerID: playerID,
+				Data:     mustMarshal(map[string]interface{}{"correct": correct, "moduleIndex": data.ModuleIndex, "command": data.Command}),
+			}
+			responseBytes, _ := json.Marshal(response)
+			select {
+			case player.Conn.Send <- responseBytes:
+			default:
+				// Channel full, skip
+			}
+		}
+		
 	case "updateLobbySettings":
 		// Only allow host to update settings, and only in waiting state
 		if session.GetLobbyState() != models.LobbyStateWaiting {

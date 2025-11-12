@@ -22,6 +22,9 @@ class Bomb3D {
         // Initialize button manager
         this.buttonManager = new ButtonManager(this.bombGroup, this.bombGeometry.modulePanels);
         
+        // Initialize terminal manager
+        this.terminalManager = new TerminalManager(this.bombGroup, this.bombGeometry.modulePanels);
+        
         // Initialize visual feedback manager
         this.visualFeedbackManager = new VisualFeedbackManager(
             this.bombGeometry.moduleGlows,
@@ -45,9 +48,10 @@ class Bomb3D {
             this.zoomManager
         );
         
-        // Store wiresModules and buttonModules state to check if modules are solved
+        // Store wiresModules, buttonModules, and terminalModules state to check if modules are solved
         this.wiresModulesState = null;
         this.buttonModulesState = null;
+        this.terminalModulesState = null;
         
         // Initialize interaction manager
         this.interactionManager = new InteractionManager(
@@ -63,7 +67,9 @@ class Bomb3D {
             this.visualFeedbackManager,
             this.wiresManager,
             this.buttonManager,
-            () => this.buttonModulesState // Getter function for buttonModulesState
+            () => this.buttonModulesState, // Getter function for buttonModulesState
+            this.terminalManager,
+            () => this.terminalModulesState // Getter function for terminalModulesState
         );
         this.interactionManager.setupEventListeners();
         
@@ -139,6 +145,34 @@ class Bomb3D {
                     // Update gauge color (only show when pressed)
                     const gaugeColor = module.isPressed ? (module.gaugeColor || '') : '';
                     this.buttonManager.updateGaugeColor(moduleIndex, gaugeColor);
+                }
+            });
+        }
+    }
+    
+    updateTerminals(terminalModules) {
+        // Store terminalModules state
+        this.terminalModulesState = terminalModules;
+        
+        // Update terminal manager with module counts for correct panel indexing
+        const wireModuleCount = this.wiresModulesState ? this.wiresModulesState.length : 0;
+        const buttonModuleCount = this.buttonModulesState ? this.buttonModulesState.length : 0;
+        this.terminalManager.setModuleCounts(wireModuleCount, buttonModuleCount);
+        
+        // Update terminals manager
+        this.terminalManager.updateTerminals(terminalModules);
+        
+        // Update terminal states
+        if (terminalModules && Array.isArray(terminalModules)) {
+            terminalModules.forEach((module, moduleIndex) => {
+                if (module) {
+                    this.terminalManager.updateTerminalState(
+                        moduleIndex,
+                        module.terminalTexts || [],
+                        module.currentStep || 0,
+                        module.enteredCommands || [],
+                        module.isSolved || false
+                    );
                 }
             });
         }

@@ -17,17 +17,18 @@ const (
 
 // Bomb represents the bomb with its modules and state
 type Bomb struct {
-	ID            string                    `json:"id"`
-	State         BombState                 `json:"state"`
-	Strikes       int                       `json:"strikes"`
-	MaxStrikes    int                       `json:"maxStrikes"`
-	TimeRemaining int                       `json:"timeRemaining"` // seconds
-	TimeLimit     int                       `json:"-"`             // initial time limit (not serialized)
-	StartTime     time.Time                 `json:"startTime"`
-	WiresModules  []*WiresModule             `json:"wiresModules"` // Wire modules
-	ButtonModules []*ButtonModule            `json:"buttonModules"` // Button modules
-	ModuleRules   map[string]*ModuleManual `json:"moduleRules"`   // Rules for each module type
-	Seed          int64                     `json:"seed"`          // Random seed used for rule generation (ensures manual and modules are aligned)
+	ID              string                   `json:"id"`
+	State           BombState                `json:"state"`
+	Strikes         int                      `json:"strikes"`
+	MaxStrikes      int                      `json:"maxStrikes"`
+	TimeRemaining   int                      `json:"timeRemaining"` // seconds
+	TimeLimit       int                      `json:"-"`             // initial time limit (not serialized)
+	StartTime       time.Time                `json:"startTime"`
+	WiresModules    []*WiresModule           `json:"wiresModules"`    // Wire modules
+	ButtonModules   []*ButtonModule          `json:"buttonModules"`   // Button modules
+	TerminalModules []*TerminalModule        `json:"terminalModules"` // Terminal modules
+	ModuleRules     map[string]*ModuleManual `json:"moduleRules"`     // Rules for each module type
+	Seed            int64                    `json:"seed"`            // Random seed used for rule generation (ensures manual and modules are aligned)
 }
 
 // NewBomb creates a new bomb with initial configuration
@@ -39,20 +40,26 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 	if moduleCount > 6 {
 		moduleCount = 6
 	}
-	
+
 	// Generate a random seed for this bomb
 	// This seed will be used for both manual and module rules to ensure they are aligned
 	seed := rand.Int63()
-	
-	// Randomly split moduleCount between wire and button modules
+
+	// Randomly split moduleCount between wire, button, and terminal modules
 	// Create a seeded RNG for module type distribution
 	moduleTypeRNG := rand.New(rand.NewSource(seed))
-	numWireModules := moduleTypeRNG.Intn(moduleCount + 1) // 0 to moduleCount
-	numButtonModules := moduleCount - numWireModules
-	
+
+	// First decide how many terminal modules (0 to moduleCount/2, but at least 0)
+	numTerminalModules := moduleTypeRNG.Intn((moduleCount / 2) + 1)
+	remainingModules := moduleCount - numTerminalModules
+
+	// Split remaining between wire and button modules
+	numWireModules := moduleTypeRNG.Intn(remainingModules + 1) // 0 to remainingModules
+	numButtonModules := remainingModules - numWireModules
+
 	// Store module rules - each module will have its own manual
 	moduleRules := make(map[string]*ModuleManual)
-	
+
 	// Create wire modules - each generates its own rules based on wire count using the random seed
 	wiresModules := make([]*WiresModule, numWireModules)
 	for i := 0; i < numWireModules; i++ {
@@ -61,11 +68,11 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		moduleSeed := seed + int64(i)*1000000 // Large multiplier to avoid overlap with rule seeds
 		module, moduleManual := NewWiresModuleWithRules(moduleSeed, seed)
 		wiresModules[i] = module
-		
+
 		// Store manual with module index key (e.g., "wireModule0", "wireModule1")
 		moduleRules[fmt.Sprintf("wireModule%d", i)] = moduleManual
 	}
-	
+
 	// Create button modules - each generates its own rules using the random seed
 	buttonModules := make([]*ButtonModule, numButtonModules)
 	for i := 0; i < numButtonModules; i++ {
@@ -73,23 +80,36 @@ func NewBomb(id string, timeLimit int, moduleCount int) *Bomb {
 		buttonSeed := seed + int64(10000000) + int64(i)*1000000 // Different offset from wire modules
 		module, moduleManual := NewButtonModuleWithRules(buttonSeed, seed)
 		buttonModules[i] = module
-		
+
 		// Store manual with module index key (e.g., "buttonModule0", "buttonModule1")
 		moduleRules[fmt.Sprintf("buttonModule%d", i)] = moduleManual
 	}
 
+	// Create terminal modules - each generates its own rules using the random seed
+	terminalModules := make([]*TerminalModule, numTerminalModules)
+	for i := 0; i < numTerminalModules; i++ {
+		// Use seed + offset + moduleIndex to differentiate each module's terminal generation
+		terminalSeed := seed + int64(20000000) + int64(i)*1000000 // Different offset from wire and button modules
+		module, moduleManual := NewTerminalModuleWithRules(terminalSeed, seed)
+		terminalModules[i] = module
+
+		// Store manual with module index key (e.g., "terminalModule0", "terminalModule1")
+		moduleRules[fmt.Sprintf("terminalModule%d", i)] = moduleManual
+	}
+
 	return &Bomb{
-		ID:            id,
-		State:         BombStateActive,
-		Strikes:       0,
-		MaxStrikes:    3,
-		TimeRemaining: timeLimit,
-		TimeLimit:     timeLimit,
-		StartTime:     time.Now(),
-		WiresModules:  wiresModules,
-		ButtonModules: buttonModules,
-		ModuleRules:   moduleRules,
-		Seed:          seed,
+		ID:              id,
+		State:           BombStateActive,
+		Strikes:         0,
+		MaxStrikes:      3,
+		TimeRemaining:   timeLimit,
+		TimeLimit:       timeLimit,
+		StartTime:       time.Now(),
+		WiresModules:    wiresModules,
+		ButtonModules:   buttonModules,
+		TerminalModules: terminalModules,
+		ModuleRules:     moduleRules,
+		Seed:            seed,
 	}
 }
 
@@ -235,10 +255,40 @@ func (b *Bomb) ReleaseButton(moduleIndex int) bool {
 	return true
 }
 
+// EnterTerminalCommand handles entering a command in a specific terminal module
+func (b *Bomb) EnterTerminalCommand(moduleIndex int, command string) bool {
+	if b.State != BombStateActive {
+		return false
+	}
+
+	if moduleIndex < 0 || moduleIndex >= len(b.TerminalModules) {
+		return false // Invalid module index
+	}
+
+	module := b.TerminalModules[moduleIndex]
+	if module == nil {
+		return false
+	}
+	if module.IsSolved {
+		return false // Already solved
+	}
+
+	correct := module.EnterCommand(command)
+	if !correct {
+		b.AddStrike()
+		return false
+	}
+
+	// Check if all modules are solved
+	b.CheckWinCondition()
+
+	return true
+}
+
 // CheckWinCondition checks if the bomb is defused
 func (b *Bomb) CheckWinCondition() {
 	allSolved := true
-	
+
 	// Check wire modules
 	for _, module := range b.WiresModules {
 		if module != nil && !module.IsSolved {
@@ -246,10 +296,20 @@ func (b *Bomb) CheckWinCondition() {
 			break
 		}
 	}
-	
+
 	// Check button modules
 	if allSolved {
 		for _, module := range b.ButtonModules {
+			if module != nil && !module.IsSolved {
+				allSolved = false
+				break
+			}
+		}
+	}
+
+	// Check terminal modules
+	if allSolved {
+		for _, module := range b.TerminalModules {
 			if module != nil && !module.IsSolved {
 				allSolved = false
 				break
